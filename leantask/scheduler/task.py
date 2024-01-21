@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, IO, Iterable, TYPE_CHECKING, Union
 
@@ -28,6 +29,16 @@ class TaskOutputFile:
         return self._output_path.exists()
 
 
+class TaskRunStatus(Enum):
+    DONE = 0
+    PENDING = 10
+    RUNNING = 11
+    FAILED = 20
+    FAILED_UPSTREAM = 21
+    SKIPPED = 30
+    SKIPPED_UPSTREAM = 31
+
+
 class Task:
     '''Basic Task class
 
@@ -42,6 +53,7 @@ class Task:
             retry_delay: int = 0,
             weight: int = 1,
             attrs: dict = None,
+            allow_skipped_upstream: bool = False,
             flow = None
         ) -> None:
         if output_path is not None and not isinstance(output_path, Path):
@@ -57,9 +69,13 @@ class Task:
         self._upstream = set()
         self._downstream = set()
 
+        self._run_status = None
+
         if attrs is None:
             attrs = dict()
         self.attrs = attrs.copy()
+
+        self.allow_skipped_upstream = allow_skipped_upstream
 
         TaskContext.__names__ += (name,)
         self._flow = self._validate_flow(flow)
@@ -68,6 +84,17 @@ class Task:
 
     def __repr__(self) -> str:
         return f"<Task name='{self.name}'>"
+
+    @property
+    def run_status(self) -> Union[TaskRunStatus, None]:
+        return self._run_status
+
+    @run_status.setter
+    def run_status(self, value: TaskRunStatus):
+        if not isinstance(value, TaskRunStatus):
+            raise ValueError(f"Value should be an object of 'TaskRunStatus' not '{type(value)}'.")
+
+        self._run_status = value
 
     @property
     def flow(self) -> Flow:
@@ -184,16 +211,19 @@ def task(
                 )
 
             if 'attrs' in task_kwargs:
-                raise TypeError(
+                raise ValueError(
                     "Task 'attrs' is a reserved keyword. "
                     "Please use different keyword name."
                 )
 
             if 'inputs' in task_kwargs:
-                raise TypeError(
+                raise ValueError(
                     "Task 'inputs' is a reserved keyword. "
                     "Please use different keyword name."
                 )
+            
+            if output_file and task_output_path is None:
+                raise AttributeError("Task 'task_output_path' should be filled.")
 
             class PythonTask(Task):
                 def __init__(

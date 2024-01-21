@@ -14,5 +14,5 @@ def fail_task(
     print(f"Succesfully run task after {attrs['retry_count']} retry(s).")
 
 
-with Flow('task_attrs') as flow:
+with Flow('task_attributes') as flow:
     fail_task(task_retry=3)

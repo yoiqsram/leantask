@@ -13,7 +13,7 @@ def bar(inputs):
     print(inputs)
 
 
-with Flow('task_attrs') as flow:
+with Flow('task_input_output') as flow:
     task_1 = foo()
     task_2 = bar()
 

@@ -11,23 +11,14 @@ from leantask.cli.flow import run_flow_cli
 from leantask.logging import logger, db_logger
 from .context import FlowContext
 from .schedule import Schedule
-from .task import Task, TaskSkipped
-
-
-class TaskRunStatus(Enum):
-    DONE = 0
-    RUNNING = 1
-    PENDING = 2
-    FAILED = 3
-    FAILED_UPSTREAM = 4
-    SKIPPED = 9
+from .task import Task, TaskSkipped, TaskRunStatus
 
 
 class FlowRunStatus(Enum):
     DONE = 0
-    RUNNING = 1
-    PENDING = 2
-    FAILED = 3
+    PENDING = 10
+    RUNNING = 11
+    FAILED = 20
 
 
 class TaskRun:
@@ -44,18 +35,15 @@ class TaskRun:
     @property
     def status(self) -> TaskRunStatus:
         '''Return task run status.'''
-        return self._status
+        return self.task.run_status
 
     @status.setter
     def status(self, value: TaskRunStatus) -> None:
-        if not isinstance(value, TaskRunStatus):
-            raise TypeError(f"TaskRun'status' must be a TaskRunStatus, not '{type(value)}'.")
-
-        self._status = value
+        self.task.run_status = value
         self.status_datetime = datetime.now()
 
         # TODO: Log task run status changes.
-        # print(f"Task '{self.task.name}' run status changed to:", self._status)
+        # print(f"Task '{self.task.name}' run status changed to:", self.status)
 
     @property
     def total_seconds(self) -> float:
@@ -164,7 +152,12 @@ class Flow:
         ordered_tasks = self._get_task_run_order()
         # TODO: Log flow run start.
         # print(f"Running flow '{self.name}'...")
+        # print(ordered_tasks)
         for task in ordered_tasks:
+            if task.run_status is not None \
+                    and task.run_status != TaskRunStatus.PENDING:
+                continue
+
             task_retry = 0
             task_run = TaskRun(task)
             while task_retry <= task.retry:
@@ -190,7 +183,5 @@ class Flow:
 
                     if task_run.status == TaskRunStatus.FAILED:
                         downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
-                    else:
-                        downstream_task_run.status = TaskRunStatus.SKIPPED
-
-                break
+                    elif not downstream_task.allow_skipped_upstream:
+                        downstream_task_run.status = TaskRunStatus.SKIPPED_UPSTREAM

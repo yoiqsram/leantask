@@ -48,7 +48,7 @@ class FlowRun:
     def status(self, value: FlowRunStatus) -> None:
         if not isinstance(value, FlowRunStatus):
             raise TypeError(
-                f"Run status should be 'FlowRunStatus' not '{type(value)}'."
+                f"Run status of flow '{self.flow.name}' should be 'FlowRunStatus' not '{type(value)}'."
             )
 
         if self._status == FlowRunStatus.DONE or (
@@ -56,7 +56,7 @@ class FlowRun:
                 and value.value <= self._status.value
             ):
             raise ValueError(
-                'Run status cannot be set to similar or backward state from '
+                f"Run status of flow '{self.flow.name}' cannot be set to similar or backward state from "
                 f"'{self._status.name}' to '{value.name}'."
             )
 
@@ -249,15 +249,15 @@ class Flow:
             if task_run.status != TaskRunStatus.PENDING:
                 continue
 
-            while task_run.attempt <= task.retry_max + 1:
+            while True:
+                print(task_run.task.name, task_run.attempt)
                 task_run.execute()
 
-                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
+                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED) \
+                    or task_run.attempt > task.retry_max:
                     break
 
-                if task_run.attempt < task.retry_max:
-                    sleep(task.retry_delay)
-
+                sleep(task.retry_delay)
                 task_run = flow_run.create_task_run(task, attempt=task_run.attempt + 1)
 
             if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
@@ -268,7 +268,7 @@ class Flow:
 
                     downstream_task_run = flow_run.get_task_run(downstream_task)
                     downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
-        
+
         flow_run.status = FlowRunStatus.DONE if not has_failed else FlowRunStatus.FAILED
         return flow_run
 

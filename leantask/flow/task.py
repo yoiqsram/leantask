@@ -39,7 +39,7 @@ class TaskRun:
     def status(self, value: TaskRunStatus) -> None:
         if not isinstance(value, TaskRunStatus):
             raise TypeError(
-                f"Run status should be 'TaskRunStatus' not '{type(value)}'."
+                f"Run status of flow '{self.task.name}' should be 'TaskRunStatus' not '{type(value)}'."
             )
 
         if self._status == TaskRunStatus.DONE or (
@@ -47,7 +47,7 @@ class TaskRun:
                 and value.value <= self._status.value
             ):
             raise ValueError(
-                'Run status cannot be set to similar or backward state from '
+                f"Run status of flow '{self.task.name}' cannot be set to similar or backward state from "
                 f"'{self._status.name}' to '{value.name}'."
             )
 

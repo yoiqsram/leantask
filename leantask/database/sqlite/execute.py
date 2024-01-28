@@ -14,7 +14,7 @@ def update_flow_run_status_to_db(flow_run) -> None:
         'flow_id': flow_run.flow.id,
         'status': flow_run.status.name,
         'schedule_datetime': flow_run.schedule_datetime,
-        'schedule_id': flow_run.schedule_id
+        'flow_schedule_id': flow_run.schedule_id
     }
     if flow_run.id is None:
         flow_run.id = generate_uuid()
@@ -34,7 +34,7 @@ def update_flow_run_status_to_db(flow_run) -> None:
         'schedule_datetime': record['schedule_datetime'],
         'ref_id': record['id'],
         'ref_flow_id': record['flow_id'],
-        'ref_schedule_id': record['schedule_id'],
+        'ref_flow_schedule_id': record['flow_schedule_id'],
         'created_datetime': flow_run.modified_datetime,
     }
     log_insert(LogTableName.FLOW_RUN.value, log_record)

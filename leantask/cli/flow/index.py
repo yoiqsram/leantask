@@ -23,7 +23,6 @@ def index_flow(args: Namespace, flow) -> None:
             index_metadata_to_db(flow, session)
     
     except Exception as exc:
-        raise exc
         print(f'{exc.__class__.__name__}: {exc}')
         raise SystemExit(FlowIndexStatus.FAILED)
 

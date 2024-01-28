@@ -52,7 +52,7 @@ class FlowRunLogModel(LogModel):
 
     ref_id = Column(UUID_STRING, nullable=False)
     ref_flow_id = Column(UUID_STRING, ForeignKey('flows.ref_id'), nullable=False)
-    ref_schedule_id = Column(UUID_STRING)
+    ref_flow_schedule_id = Column(UUID_STRING)
 
     scheduler_session_id = column_scheduler_session_id()
     created_datetime = column_current_datetime()

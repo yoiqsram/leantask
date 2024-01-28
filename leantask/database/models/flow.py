@@ -87,7 +87,7 @@ class FlowRunModel(Model):
     schedule_datetime = Column(DateTime)
     status = Column(SMALL_STRING, nullable=False)
 
-    schedule_id = Column(UUID_STRING)
+    flow_schedule_id = Column(UUID_STRING)
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()

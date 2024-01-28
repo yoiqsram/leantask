@@ -8,10 +8,10 @@ def print_task(message: str):
     print(message)
 
 
-@task(attrs={'retry_count': 0})
-def fail_task(attrs, message: str, on_retry: int = 3):
-    if attrs['retry_count'] < on_retry:
-        attrs['retry_count'] += 1
+@task(attrs={'attempt_count': 0})
+def fail_task(attrs, message: str, success_on_attempt: int = 3):
+    if attrs['attempt_count'] < success_on_attempt:
+        attrs['attempt_count'] += 1
         raise Exception('Fail task.')
 
     print(message)
@@ -59,8 +59,8 @@ with Flow(
 
     task_2_a = fail_task(
         task_name='2_a_fail',
-        task_retry_max=3,
-        message='Task #2.a fail after some attempt(s).'
+        task_retry_max=1,
+        message='Task #2.a run after some attempt(s).'
     )
 
     task_3 = json_output(

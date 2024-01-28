@@ -1,5 +1,5 @@
 import json
-from leantask import task, Flow, TaskSkipped
+from leantask import task, Flow
 from pathlib import Path
 
 
@@ -9,16 +9,12 @@ def print_task(message: str):
 
 
 @task(attrs={'retry_count': 0})
-def fail_task(attrs, message: str, on_retry: int = 1):
+def fail_task(attrs, message: str, on_retry: int = 3):
     if attrs['retry_count'] < on_retry:
         attrs['retry_count'] += 1
         raise Exception('Fail task.')
 
     print(message)
-
-@task
-def skip_task():
-    raise TaskSkipped('Intentionally skipped the task.')
 
 @task
 def json_output(data: dict):
@@ -32,7 +28,10 @@ def write_file(inputs):
     return json.dumps(inputs)
 
 
-with Flow('task_flow') as flow:
+with Flow(
+        'task_dependencies',
+        description='Example of task dependencies in a workflow.'
+    ) as flow:
     task_0 = print_task(
         task_name='0_print',
         message='Task #0: Independent task'
@@ -48,7 +47,10 @@ with Flow('task_flow') as flow:
         message='Task #1.a run after Task #1'
     )
 
-    task_1_b = skip_task(task_name='b_skip')
+    task_1_b = print_task(
+        task_name='b_skip',
+        message='Task #1.b run after Task #1'
+    )
 
     task_2 = print_task(
         task_name='2_print',
@@ -57,8 +59,8 @@ with Flow('task_flow') as flow:
 
     task_2_a = fail_task(
         task_name='2_a_fail',
-        task_retry=3,
-        message='Task #2.a fail on the first trial'
+        task_retry_max=3,
+        message='Task #2.a fail after some attempt(s).'
     )
 
     task_3 = json_output(

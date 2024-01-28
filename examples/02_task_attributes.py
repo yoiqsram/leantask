@@ -6,7 +6,8 @@ def fail_task(
         attrs,
         on_retry: int = 1
     ):
-    print('Running task with retry_count:', attrs['retry_count'])
+    '''Fail task and success after 'on_retry' time(s).'''
+    print("Running task with 'retry_count':", attrs['retry_count'])
     if attrs['retry_count'] < on_retry:
         attrs['retry_count'] += 1
         raise Exception('Fail task.')
@@ -14,5 +15,8 @@ def fail_task(
     print(f"Succesfully run task after {attrs['retry_count']} retry(s).")
 
 
-with Flow('task_attributes') as flow:
-    fail_task(task_retry=3)
+with Flow(
+        'task_attributes',
+        description='Example of using attributes in task.'
+    ) as flow:
+    fail_task(task_retry_max=3)

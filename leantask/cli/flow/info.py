@@ -5,8 +5,8 @@ from typing import Callable
 def add_info_parser(subparsers) -> Callable:
     subparsers.add_parser(
         'info',
-        help='Show flow information.',
-        description='Show flow information.'
+        help='show flow information',
+        description='show flow information'
     )
     return show_info
 

@@ -32,7 +32,7 @@ class FlowLogModel(LogModel):
     flow_runs = relationship(
         'FlowRunLogModel',
         back_populates='flow',
-        cascade='all, delete-orphan',
+        cascade='all, delete-orphan'
     )
 
     def __repr__(self):
@@ -56,6 +56,18 @@ class FlowRunLogModel(LogModel):
 
     scheduler_session_id = column_scheduler_session_id()
     created_datetime = column_current_datetime()
+
+    flow = relationship(
+        'FlowLogModel',
+        back_populates='flow_runs',
+        uselist=False
+    )
+
+    task_runs = relationship(
+        'TaskRunLogModel',
+        back_populates='flow_run',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return (

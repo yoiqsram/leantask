@@ -21,14 +21,14 @@ class FlowRun:
             flow: Flow,
             schedule_datetime: datetime = None,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
-            schedule_id: str = None,
+            __schedule_id: str = None,
             __id: str = None
         ) -> None:
         self.id = __id if __id is not None else generate_uuid()
         self.flow = flow
         self.flow.add_run(self)
         self.schedule_datetime = schedule_datetime
-        self.schedule_id = schedule_id
+        self.schedule_id = __schedule_id
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
 
@@ -121,7 +121,7 @@ class Flow:
             end_datetime: datetime = None,
             max_delay: int = None,
             active: bool = True,
-            __id: str = None,
+            __id: str = None
         ) -> None:
         if FlowContext.__defined__ is not None:
             raise RuntimeError('You can only define one flow.')
@@ -239,9 +239,6 @@ class Flow:
         if flow_run.status != FlowRunStatus.RUNNING:
             return flow_run
 
-        # TODO: Log flow run start.
-        # print(f"Running flow '{self.name}'...")
-        # print(ordered_tasks)
         has_failed = False
         for task in flow_run.tasks_ordered:
             task_run = flow_run.get_task_run(task)
@@ -250,7 +247,7 @@ class Flow:
                 continue
 
             while True:
-                print(task_run.task.name, task_run.attempt)
+                # print(task_run.task.name, task_run.attempt)
                 task_run.execute()
 
                 if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED) \

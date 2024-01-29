@@ -29,6 +29,15 @@ def sqlite_connect(database_path: Path) -> Callable:
     return decorator
 
 
+def _parse_value(value: Any):
+    if isinstance(value, str) \
+            or isinstance(value, int) \
+            or isinstance(value, float):
+        return str(value)
+
+    return value
+
+
 def _query(
         __query: str,
         parameters: tuple = (),
@@ -58,7 +67,7 @@ def _insert(
     ) -> None:
     cursor = connection.cursor()
     columns = tuple(record.keys())
-    values = tuple(record.values())
+    values = tuple(_parse_value(value) for value in record.values())
 
     query = f'''\
         INSERT INTO {table_name}
@@ -77,8 +86,10 @@ def _update(
         connection: sqlite3.Connection = None
     ) -> None:
     cursor = connection.cursor()
-    columns_set, values_set = tuple(items_set.keys()), tuple(items_set.keys())
-    columns_filter, values_filter = tuple(items_filter.keys()), tuple(items_filter.keys())
+    columns_set = tuple(items_set.keys())
+    values_set = tuple(_parse_value(value) for value in items_set.values())
+    columns_filter = tuple(items_filter.keys())
+    values_filter = tuple(_parse_value(value) for value in items_filter.values())
 
     query = f'''\
         UPDATE {table_name}

@@ -2,7 +2,8 @@ from ._base import (
     LogModel, Column, Integer, ForeignKey,
     SMALL_STRING, MEDIUM_STRING, UUID_STRING,
     column_uuid_primary_key, column_current_datetime,
-    unique_compound_constraint, relationship
+    unique_compound_constraint,
+    relationship
 )
 from ....enum import LogTableName
 
@@ -22,12 +23,6 @@ class TaskLogModel(LogModel):
         'FlowLogModel',
         back_populates='tasks',
         uselist=False
-    )
-
-    task_downstreams = relationship(
-        'TaskDownstreamLogModel',
-        back_populates='task',
-        cascade='all, delete-orphan'
     )
 
     task_runs = relationship(
@@ -51,11 +46,13 @@ class TaskDownstreamLogModel(LogModel):
     __tablename__ = LogTableName.TASK_DOWNSTREAM.value
 
     id = column_uuid_primary_key()
+
+    ref_id = Column(UUID_STRING, nullable=False)
     ref_task_id = Column(UUID_STRING, ForeignKey('tasks.ref_id'), nullable=False)
     ref_downstream_task_id = Column(UUID_STRING, ForeignKey('tasks.ref_id'), nullable=False)
 
-    task = relationship('TaskModel', foreign_keys=[ref_task_id])
-    downstream_task = relationship('TaskModel', foreign_keys=[ref_downstream_task_id])
+    task = relationship('TaskLogModel', foreign_keys=[ref_task_id])
+    downstream_task = relationship('TaskLogModel', foreign_keys=[ref_downstream_task_id])
 
     def __repr__(self):
         return (

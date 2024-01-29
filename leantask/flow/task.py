@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Set, Union
 
 from ..database.sqlite.execute import update_task_run_status_to_db
+from ..context import GlobalContext
 from ..enum import TaskRunStatus
 from ..utils.string import generate_uuid, validate_use_safe_chars
 from .context import FlowContext, TaskContext
@@ -23,6 +24,7 @@ class TaskRun:
         ) -> None:
         self.id = __id if __id is not None else generate_uuid()
         self.task = task
+        self.task.add_run(self)
         self.flow_run = flow_run
         self.attempt = attempt
         self.created_datetime: datetime = datetime.now()
@@ -150,6 +152,9 @@ class Task:
     def runs(self) -> List[TaskRun]:
         return self._runs
 
+    def add_run(self, task_run: TaskRun) -> None:
+        self._runs.append(task_run)
+
     def run(self) -> None:
         '''Replace this method to be implemented by your new subclass.'''
         raise NotImplemented("You need to define Task 'run' method.")
@@ -252,22 +257,14 @@ def task(
                 raise AttributeError("Task 'task_output_path' should be filled.")
 
             class PythonTask(Task):
-                def __init__(
-                        self,
-                        name: str,
-                        output_path: Path = None,
-                        retry_max: int = 0,
-                        retry_delay: int = None,
-                        attrs: dict = None,
-                        flow = None
-                    ):
+                def __init__(self):
                     super().__init__(
-                        name=name,
-                        output_path=output_path,
-                        retry_max=retry_max,
-                        retry_delay=retry_delay,
+                        name=task_name,
+                        output_path=task_output_path,
+                        retry_max=task_retry_max,
+                        retry_delay=task_retry_delay,
                         attrs=attrs,
-                        flow=flow
+                        flow=task_flow
                     )
                     self.task_args = task_args
                     self.task_kwargs = task_kwargs
@@ -288,14 +285,7 @@ def task(
                     else:
                         self.output(output)
 
-            return PythonTask(
-                name=task_name,
-                output_path=task_output_path if output_file else None,
-                retry_max=task_retry_max,
-                retry_delay=task_retry_delay,
-                attrs=attrs,
-                flow=task_flow
-            )
+            return PythonTask()
 
         return task_register
 

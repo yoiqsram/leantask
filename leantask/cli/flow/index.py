@@ -1,4 +1,4 @@
-from argparse import Namespace
+import argparse
 from typing import Callable, Dict, List
 
 from ...context import GlobalContext
@@ -8,27 +8,32 @@ from ...enum import FlowIndexStatus
 def add_index_parser(subparsers) -> Callable:
     parser = subparsers.add_parser(
         'index',
-        help='Index flow to database.',
-        description='Index flow to database.'
+        help='index flow to database',
+        description='index flow to database'
+    )
+    parser.add_argument(
+        '--force', '-F',
+        action='store_true',
+        help=argparse.SUPPRESS
     )
 
     return index_flow
 
 
-def index_flow(args: Namespace, flow) -> None:
+def index_flow(args: argparse.Namespace, flow) -> None:
     from ...database.orm import open_db_session
 
     try:
         with open_db_session(GlobalContext.database_path()) as session:
-            index_metadata_to_db(flow, session)
+            index_metadata_to_db(flow, session, args.force)
     
     except Exception as exc:
         print(f'{exc.__class__.__name__}: {exc}')
         raise SystemExit(FlowIndexStatus.FAILED)
 
 
-def index_metadata_to_db(flow, session) -> None:
-    from ...database.execute import get_flow_record, add_records_to_log
+def index_metadata_to_db(flow, session, force: bool = False) -> None:
+    from ...database.execute import get_flow_record, copy_records_to_log
     from ...database.models import FlowModel, TaskModel, TaskDownstreamModel
     from ...database.orm import NoResultFound
 
@@ -39,14 +44,14 @@ def index_metadata_to_db(flow, session) -> None:
 
     try:
         # Reindex existing flow record
-        flow_record = get_flow_record(flow.name, session)
+        flow_record = get_flow_record(flow.name, session=session)
 
         tasks_query = (
             session.query(TaskModel)
             .filter(TaskModel.flow_id == flow_record.id)
         )
 
-        if flow_record.checksum == flow.checksum:
+        if flow_record.checksum == flow.checksum and not force:
             print('Flow is already indexed.')
             raise SystemExit(FlowIndexStatus.UNCHANGED.value)
 
@@ -61,7 +66,7 @@ def index_metadata_to_db(flow, session) -> None:
         # Index new flow record
         flow_record = FlowModel(
             name=flow.name,
-            path=flow.path,
+            path=str(flow.path),
             checksum=flow.checksum,
             max_delay=flow.max_delay,
             active=flow.active
@@ -73,7 +78,7 @@ def index_metadata_to_db(flow, session) -> None:
         name: TaskModel(name=name, flow=flow_record)
         for name in tasks_relationship.keys()
     }
-    task_records = task_record_map.values()
+    task_records = list(task_record_map.values())
     session.add_all(task_records)
 
     task_downstream_records = [
@@ -88,7 +93,7 @@ def index_metadata_to_db(flow, session) -> None:
 
     session.commit()
 
-    add_records_to_log([flow_record] + task_records + task_downstream_records)
+    copy_records_to_log([flow_record] + task_records + task_downstream_records)
 
     print(
         f"Successfully indexing '{flow.name}' workflow",

@@ -14,7 +14,7 @@ class GlobalContext:
 
     SCHEDULER_SESSION_ID: str = None
 
-    LOCAL_RUN: bool = False
+    LOCAL_RUN: bool = True
 
     @classmethod
     def set_project_dir(cls, value: Path) -> None:

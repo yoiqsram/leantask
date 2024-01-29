@@ -7,11 +7,12 @@ from ..enum import TaskRunStatus
 from ..context import GlobalContext
 from .models import (
     FlowModel, FlowScheduleModel, FlowRunModel,
-    TaskModel, TaskDownstreamModel, TaskScheduleModel, TaskRunModel
+    TaskModel, TaskDownstreamModel, TaskScheduleModel, TaskRunModel,
+    log as log_models
 )
 from .models.log import (
     FlowLogModel, FlowRunLogModel,
-    TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel,
+    TaskLogModel,
     SchedulerSessionModel
 )
 from .orm import db_session, Session
@@ -102,34 +103,38 @@ def get_schedules(
 
 
 @db_session(GlobalContext.log_database_path())
-def add_records_to_log(
+def copy_records_to_log(
         records: List[Union[
             FlowModel, FlowRunModel, TaskModel,
             TaskDownstreamModel, TaskScheduleModel, TaskRunModel
         ]],
         session: Session
     ) -> None:
+    log_records = []
     for record in records:
-        attrs = dict()
-        record_attrs = dir(record)
-        for attr in record_attrs:
-            if attr == 'id':
-                attrs[f'main_{record.__tablename__[:-1]}_id'] = getattr(record, attr)
+        kwargs = dict()
+        columns = [column.name for column in record.__table__.columns]
+        for column in columns:
+            if column == 'id':
+                kwargs['ref_id'] = getattr(record, column)
 
-            elif attr == 'modified_datetime':
-                attrs['created_datetime'] = getattr(record, attr)
+            elif column.endswith('id'):
+                kwargs[f'ref_{column}'] = getattr(record, column)
 
-            elif attr == 'created_datetime':
-                if 'modified_datetime' not in record_attrs:
-                    attrs[attr] = getattr(record, attr)
+            elif column == 'modified_datetime':
+                kwargs['created_datetime'] = getattr(record, column)
 
-            elif not attr.startswith('_') or not attr == 'registry':
-                attrs[attr] = getattr(record, attr)
+            elif column == 'created_datetime' and 'modified_datetime' in columns:
+                continue
 
-        log_model_name = record.__class__.__name__.split('Model')[0] + 'LogModel'
-        log_flow_record = eval(log_model_name)(**attrs)
-        session.add(log_flow_record)
+            else:
+                kwargs[column] = getattr(record, column)
 
+        log_model_name = 'log_models.' + record.__class__.__name__.split('Model')[0] + 'LogModel'
+        log_record = eval(log_model_name)(**kwargs)
+        log_records.append(log_record)
+
+    session.add_all(log_records)
     session.commit()
 
 

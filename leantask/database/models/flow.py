@@ -67,8 +67,7 @@ class FlowScheduleModel(Model):
 
     task_schedules = relationship(
         'TaskScheduleModel',
-        back_populates='flow_schedule',
-        uselist=False
+        back_populates='flow_schedule'
     )
 
     def __repr__(self):

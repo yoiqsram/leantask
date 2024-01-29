@@ -1,3 +1,5 @@
+from typing import Any, Dict, List
+
 from ...context import GlobalContext
 from ...utils.string import generate_uuid
 
@@ -6,7 +8,7 @@ def update_flow_run_status_to_db(flow_run) -> None:
     if GlobalContext.LOCAL_RUN:
         return
 
-    from .common import insert, update, log_insert
+    from .common import query, insert, update, log_insert
     from ...enum import TableName, LogTableName
 
     record = {
@@ -16,17 +18,17 @@ def update_flow_run_status_to_db(flow_run) -> None:
         'schedule_datetime': flow_run.schedule_datetime,
         'flow_schedule_id': flow_run.schedule_id
     }
-    if flow_run.id is None:
-        flow_run.id = generate_uuid()
-        record['id'] = flow_run.id
-        record['created_datetime'] = flow_run.created_datetime
-        insert(TableName.FLOW_RUN.value, record)
 
-    else:
+    record_exists = query('select count(*) from flow_runs where id = ?', (flow_run.id, ))[0][0] > 0
+    if record_exists:
         record['modified_datetime'] = flow_run.modified_datetime
         items_set = {column: record[column] for column in ['status', 'modified_datetime']}
         items_filter = {column: record[column] for column in ['id']}
         update(TableName.FLOW_RUN.value, items_set, items_filter)
+
+    else:
+        record['created_datetime'] = flow_run.created_datetime
+        insert(TableName.FLOW_RUN.value, record)
 
     log_record = {
         'id': generate_uuid(),
@@ -44,7 +46,7 @@ def update_task_run_status_to_db(task_run) -> None:
     if GlobalContext.LOCAL_RUN:
         return
 
-    from .common import insert, update, log_insert
+    from .common import query, insert, update, log_insert
     from ...enum import TableName, LogTableName
 
     record = {
@@ -54,17 +56,17 @@ def update_task_run_status_to_db(task_run) -> None:
         'attempt': task_run.attempt,
         'status': task_run.status.name
     }
-    if task_run.id is None:
-        task_run.id = generate_uuid()
-        record['id'] = task_run.id
-        record['created_datetime'] = task_run.created_datetime
-        insert(TableName.TASK_RUN.value, record)
 
-    else:
+    record_exists = query('select count(*) from task_runs where id = ?', (task_run.id, ))[0][0] > 0
+    if record_exists:
         record['modified_datetime'] = task_run.modified_datetime
         items_set = {column: record[column] for column in ['status', 'modified_datetime']}
         items_filter = {column: record[column] for column in ['id']}
         update(TableName.TASK_RUN.value, items_set, items_filter)
+
+    else:
+        record['created_datetime'] = task_run.created_datetime
+        insert(TableName.TASK_RUN.value, record)
 
     log_record = {
         'id': generate_uuid(),

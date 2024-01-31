@@ -13,6 +13,7 @@ class GlobalContext:
     LOG_DATABASE_NAME: str = 'leantask_log.db'
 
     SCHEDULER_SESSION_ID: str = None
+    CACHE_TIMEOUT: int = 1800
 
     LOCAL_RUN: bool = True
 

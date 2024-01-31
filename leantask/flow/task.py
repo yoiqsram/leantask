@@ -24,7 +24,6 @@ class TaskRun:
         ) -> None:
         self.id = __id if __id is not None else generate_uuid()
         self.task = task
-        self.task.add_run(self)
         self.flow_run = flow_run
         self.attempt = attempt
         self.created_datetime: datetime = datetime.now()
@@ -95,11 +94,10 @@ class Task:
             flow = None,
             __id: str = None
         ) -> None:
-        self.id = __id if __id is not None else generate_uuid()
         self._upstreams: Set[Task] = set()
         self._downstreams: Set[Task] = set()
 
-        self.flow = flow
+        self.id = __id if __id is not None else generate_uuid()
         self.name = name
         self.retry_max = retry_max
         self.retry_delay = retry_delay
@@ -112,6 +110,8 @@ class Task:
 
         self._runs: List[TaskRun] = []
 
+        self.flow = flow
+
     def __repr__(self) -> str:
         return f"<Task name='{self.name}'>"
 
@@ -121,12 +121,7 @@ class Task:
 
     @name.setter
     def name(self, value: str) -> None:
-        validate_use_safe_chars(value)
-        if hasattr(self, '_name'):
-            TaskContext.unregister(self)
-
         self._name = value
-        TaskContext.register(self)
 
     @property
     def upstreams(self) -> Task:
@@ -144,9 +139,10 @@ class Task:
     def flow(self, value) -> None:
         if value is None:
             self._flow = FlowContext.get_current_flow()
+        else:
+            self._flow = value
 
-        if self._flow is not None:
-            self._flow.add_task(self)
+        self._flow.add_task(self)
 
     @property
     def runs(self) -> List[TaskRun]:

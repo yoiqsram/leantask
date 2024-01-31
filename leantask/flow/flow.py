@@ -21,14 +21,14 @@ class FlowRun:
             flow: Flow,
             schedule_datetime: datetime = None,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
-            __schedule_id: str = None,
-            __id: str = None
+            __id: str = None,
+            __schedule_id: str = None
         ) -> None:
         self.id = __id if __id is not None else generate_uuid()
-        self.flow = flow
-        self.flow.add_run(self)
-        self.schedule_datetime = schedule_datetime
         self.schedule_id = __schedule_id
+
+        self.flow = flow
+        self.schedule_datetime = schedule_datetime
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
 
@@ -137,7 +137,7 @@ class Flow:
         self._checksum = calculate_md5(self._path)
 
         self._tasks: Set[Task] = set()
-        self._runs: List[FlowRun] = []
+        self._runs: Set[FlowRun] = []
 
         FlowContext.__defined__ = self
 
@@ -184,7 +184,7 @@ class Flow:
         return ordered_tasks[::-1]
 
     def add_run(self, flow_run: FlowRun) -> None:
-        self._runs.append(flow_run)
+        self._runs.add(flow_run)
 
     @property
     def runs(self) -> List[FlowRun]:
@@ -214,27 +214,38 @@ class Flow:
 
     def add_task(self, task: Task) -> None:
         '''Add task to the flow.'''
+        task_names = set(task.name for task in self._tasks)
         for task in task.iter_downstream():
+            if task.name in task_names:
+                raise ValueError(f"'{task.name}' is already registered in the flow.")
+
+            task_names.add(task.name)
             self._tasks.add(task)
+            task._flow = self
 
     def run(
             self,
-            flow_run: FlowRun = None,
             verbose: bool = False
         ) -> FlowRun:
         '''Run flow.'''
-        if flow_run is None:
+        if len(self.runs) == 0 \
+                or self.runs[-1].status not in (
+                    FlowRunStatus.SCHEDULED, FlowRunStatus.SCHEDULED_BY_USER,
+                    FlowRunStatus.RUNNING, FlowRunStatus.UNKNOWN
+                ):
             flow_run = FlowRun(self)
             for task in flow_run.tasks_ordered:
                 flow_run.create_task_run(task)
-
             flow_run.status = FlowRunStatus.RUNNING
 
-        if flow_run.status in (
-                FlowRunStatus.SCHEDULED,
-                FlowRunStatus.SCHEDULED_BY_USER,
-            ):
-            flow_run.status = FlowRunStatus.RUNNING
+        else:
+            flow_run = self.runs[-1]
+
+            if flow_run.status in (
+                    FlowRunStatus.SCHEDULED,
+                    FlowRunStatus.SCHEDULED_BY_USER,
+                ):
+                flow_run.status = FlowRunStatus.RUNNING
 
         if flow_run.status != FlowRunStatus.RUNNING:
             return flow_run

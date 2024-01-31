@@ -49,18 +49,24 @@ def get_task_records_by_flow_id(
     return task_records
 
 
-@db_session(GlobalContext.database_path())
+@db_session(GlobalContext.log_database_path())
 def create_scheduler_session(
         heartbeat: int,
         worker: int,
         session: Session = None
     ) -> None:
-    scheduler_session_log_record = SchedulerSessionModel(worker=worker)
-    session.add(scheduler_session_log_record)
+    scheduler_session_record = SchedulerSessionModel(
+        heartbeat=heartbeat,
+        worker=worker
+    )
+    session.add(scheduler_session_record)
+    session.commit()
+
+    GlobalContext.set_scheduler_session_id(scheduler_session_record.id)
 
 
 @db_session(GlobalContext.database_path())
-def get_schedules(
+def get_schedule_flow_task_schedules(
         __datetime: datetime = None,
         session: Session = None
     ) -> Dict[Path, Dict[str, Union[str, List[str]]]]:
@@ -91,8 +97,7 @@ def get_schedules(
     for flow_path, flow_name, task_name, _ in schedule_record_proxy:
         if not flow_path in flow_task_schedules:
             flow_task_schedules[flow_path] = {
-                'flow_name': flow_name,
-                'task_names': []
+                flow_name: flow_name
             }
 
         flow_task_schedules[flow_path]['task_names'].append(task_name)

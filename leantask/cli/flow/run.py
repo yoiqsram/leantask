@@ -4,8 +4,6 @@ from typing import Callable
 
 from ...context import GlobalContext
 from ...enum import FlowRunStatus
-from ...flow import FlowRun
-from ...utils.cache import load_cache
 from ...utils.script import get_confirmation
 
 
@@ -44,15 +42,19 @@ def add_run_parser(subparsers) -> Callable:
 def run_flow(args: argparse.Namespace, flow) -> None:
     GlobalContext.LOCAL_RUN = args.local
 
-    flow_run = None
-
     if args.cache is not None:
         if not args.force and not flow.active:
             print('Flow is currently inactive.')
             raise SystemExit(FlowRunStatus.CANCELED)
 
-        cache = load_cache(args.cache)
-        flow_run = create_flow_run_for_cache_run(flow, cache)
+        cache_flow = args.cache['flow']
+
+        if cache_flow.name != flow.name \
+                or cache_flow.checksum != flow.checksum:
+            print('Flow from cache is different with the current flow.')
+            raise SystemExit(FlowRunStatus.UNKNOWN)
+
+        flow = cache_flow
 
     elif not args.force \
             and not args.local \
@@ -77,28 +79,13 @@ def run_flow(args: argparse.Namespace, flow) -> None:
         prepare_flow_for_manual_run(flow)
 
     try:
-        flow_run = flow.run(flow_run, verbose=args.verbose)
+        flow_run = flow.run(verbose=args.verbose)
         raise SystemExit(flow_run.status.value)
 
     except Exception as exc:
+        raise exc
         print(f'{exc.__class__.__name__}: {exc}')
         raise SystemExit(FlowRunStatus.FAILED.value)
-
-
-def create_flow_run_for_cache_run(flow, cache):
-    flow_run = FlowRun(
-        flow,
-        schedule_datetime=cache['flow']['schedule_datetime'],
-        __schedule_id=cache['flow']['schedule_id'],
-        status=cache['flow_run']['status']
-    )
-    for task in flow_run.tasks_ordered:
-        flow_run.create_task_run(
-            task,
-            status=cache['task_runs'][task]['status']
-        )
-
-    return flow_run
 
 
 def prepare_flow_for_manual_run(flow):

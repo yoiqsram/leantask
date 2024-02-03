@@ -66,7 +66,7 @@ def index_metadata_to_db(flow, session, force: bool = False) -> None:
         # Index new flow record
         flow_record = FlowModel(
             name=flow.name,
-            path=str(flow.path),
+            path=str(GlobalContext.relative_path(flow.path)),
             checksum=flow.checksum,
             max_delay=flow.max_delay,
             active=flow.active

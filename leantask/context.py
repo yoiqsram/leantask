@@ -6,6 +6,7 @@ METADATA_DIRNAME = '.leantask'
 
 class GlobalContext:
     PROJECT_DIR: Path = Path(os.getcwd()).resolve()
+    WORKFLOWS_DIRNAME: str = None
     CACHE_DIRNAME: str = '__cache__'
     LOG_DIRNAME: str = 'log'
 
@@ -37,12 +38,19 @@ class GlobalContext:
         return cls.PROJECT_DIR / METADATA_DIRNAME
 
     @classmethod
+    def workflows_dir(cls) -> Path:
+        if cls.WORKFLOWS_DIRNAME is None:
+            return cls.PROJECT_DIR
+
+        return cls.PROJECT_DIR / cls.WORKFLOWS_DIRNAME
+
+    @classmethod
     def cache_dir(cls) -> Path:
         return cls.metadata_dir() / cls.CACHE_DIRNAME
 
     @classmethod
     def log_dir(cls) -> Path:
-        return cls.log_dir() / cls.LOG_DIRNAME
+        return cls.metadata_dir() / cls.LOG_DIRNAME
 
     @classmethod
     def database_path(cls) -> Path:

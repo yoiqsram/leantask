@@ -1,13 +1,13 @@
 from datetime import datetime
 from pathlib import Path
-from sqlalchemy import desc, func
 from typing import Dict, Generator, List, Union
 
 from ..enum import TaskRunStatus
 from ..context import GlobalContext
+from ..utils.string import generate_uuid
 from .models import (
     FlowModel, FlowScheduleModel, FlowRunModel,
-    TaskModel, TaskDownstreamModel, TaskScheduleModel, TaskRunModel,
+    TaskModel, TaskDownstreamModel, TaskRunModel,
     log as log_models
 )
 from .models.log import (
@@ -55,9 +55,17 @@ def create_scheduler_session(
         worker: int,
         session: Session = None
     ) -> None:
+    session_id = generate_uuid()
+
+    log_dir = GlobalContext.log_dir()
+    if not log_dir.is_dir():
+        log_dir.mkdir(parents=True)
+
     scheduler_session_record = SchedulerSessionModel(
+        id=session_id,
         heartbeat=heartbeat,
-        worker=worker
+        worker=worker,
+        log_path=str(log_dir / (session_id + '.log'))
     )
     session.add(scheduler_session_record)
     session.commit()
@@ -66,7 +74,7 @@ def create_scheduler_session(
 
 
 @db_session(GlobalContext.database_path())
-def get_schedule_flow_task_schedules(
+def get_scheduled_run_tasks(
         __datetime: datetime = None,
         session: Session = None
     ) -> Dict[Path, Dict[str, Union[str, List[str]]]]:
@@ -76,33 +84,55 @@ def get_schedule_flow_task_schedules(
     select_columns = (
         FlowModel.path,
         FlowModel.name,
+        FlowModel.checksum,
+        FlowScheduleModel.id,
+        FlowScheduleModel.schedule_datetime,
+        FlowRunModel.id,
+        FlowRunModel.status,
         TaskModel.name,
-        TaskScheduleModel.id,
+        # TaskScheduleModel.id,
+        TaskRunModel.id,
+        TaskRunModel.status,
+        TaskRunModel.attempt
     )
-    schedule_record_proxy = (
+    schedule_records = (
         session.query(*select_columns)
-        .join(FlowModel)
-        .join(TaskModel)
-        .join(FlowScheduleModel)
-        .join(TaskRunModel)
+        .select_from(FlowModel)
+        .join(FlowModel.flow_schedule)
+        .join(FlowModel.flow_runs)
+        .join(FlowModel.tasks)
+        .join(TaskModel.task_schedules)
+        .join(TaskModel.task_runs)
         .filter(
             FlowModel.active == True,
             FlowScheduleModel.schedule_datetime <= __datetime,
             TaskRunModel.status == TaskRunStatus.PENDING.name
         )
-        .execute()
+        .all()
     )
 
     flow_task_schedules = dict()
-    for flow_path, flow_name, task_name, _ in schedule_record_proxy:
-        if not flow_path in flow_task_schedules:
-            flow_task_schedules[flow_path] = {
-                flow_name: flow_name
+    for (path, name, checksum, schedule_id, schedule_datetime, run_id, run_status,
+            task_name, task_schedule_id, task_run_id, task_run_status, task_attempt
+            ) in schedule_records:
+        path = Path(path)
+        if path not in flow_task_schedules:
+            flow_task_schedules[path] = {
+                'name': name,
+                'checksum': checksum,
+                'schedule_id': schedule_id,
+                'schedule_datetime': schedule_datetime,
+                'id': run_id,
+                'status': run_status,
+                'tasks': dict()
             }
 
-        flow_task_schedules[flow_path]['task_names'].append(task_name)
-
-    schedule_record_proxy.close()
+        flow_task_schedules[path]['tasks'][task_name] = {
+            'schedule_id': task_schedule_id,
+            'id': task_run_id,
+            'attempt': task_attempt,
+            'status': task_run_status
+        }
 
     return flow_task_schedules
 
@@ -111,7 +141,7 @@ def get_schedule_flow_task_schedules(
 def copy_records_to_log(
         records: List[Union[
             FlowModel, FlowRunModel, TaskModel,
-            TaskDownstreamModel, TaskScheduleModel, TaskRunModel
+            TaskDownstreamModel, TaskRunModel
         ]],
         session: Session
     ) -> None:

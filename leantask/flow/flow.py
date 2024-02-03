@@ -19,16 +19,16 @@ class FlowRun:
     def __init__(
             self,
             flow: Flow,
-            schedule_datetime: datetime = None,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
             __id: str = None,
-            __schedule_id: str = None
+            __schedule_id: str = None,
+            __schedule_datetime: datetime = None
         ) -> None:
         self.id = __id if __id is not None else generate_uuid()
         self.schedule_id = __schedule_id
+        self.schedule_datetime = __schedule_datetime
 
         self.flow = flow
-        self.schedule_datetime = schedule_datetime
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
 
@@ -92,7 +92,9 @@ class FlowRun:
             self,
             task: Task,
             attempt: int = 1,
-            status: TaskRunStatus = TaskRunStatus.UNKNOWN
+            status: TaskRunStatus = TaskRunStatus.UNKNOWN,
+            __id: str = None,
+            __schedule_id: str = None
         ) -> TaskRun:
         if task in self._task_runs:
             attempt = self._task_runs[task].attempt + 1 if attempt is None else attempt
@@ -101,7 +103,9 @@ class FlowRun:
             self,
             task,
             attempt=attempt,
-            status=status
+            status=status,
+            __id=__id,
+            __schedule_id=None
         )
         self._task_runs[task] = task_run
         return task_run
@@ -184,6 +188,27 @@ class Flow:
         return ordered_tasks[::-1]
 
     def add_run(self, flow_run: FlowRun) -> None:
+        self._runs.add(flow_run)
+
+    def add_run_from_cache(self, cache: Dict[str, Union[str, Dict[str, str]]]) -> None:
+        flow_run = FlowRun(
+            self,
+            status=cache['status'],
+            __id=cache['id'],
+            __schedule_id=cache['schedule_id'],
+            __schedule_datetime=cache['schedule_datetime'],
+        )
+
+        tasks = {task.name: task for task in flow_run.tasks_ordered}
+        for task_name, task_run in cache['tasks'].items():
+            flow_run.create_task_run(
+                tasks[task_name],
+                attempt=task_run['attempt'],
+                status=task_run['status'],
+                __id=task_run['id'],
+                __schedule_id=task_run['schedule_id']
+            )
+
         self._runs.add(flow_run)
 
     @property
@@ -280,7 +305,8 @@ class Flow:
         flow_run.status = FlowRunStatus.DONE if not has_failed else FlowRunStatus.FAILED
         return flow_run
 
-    def next_schedule_datetime(self):
-        from datetime import timedelta
-        now = datetime.now() + timedelta(minutes=15)
-        return datetime(year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute)
+    def next_schedule_datetime(self) -> Union[None, datetime]:
+        # from datetime import timedelta
+        # now = datetime.now() + timedelta(minutes=15)
+        # return datetime(year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute)
+        return

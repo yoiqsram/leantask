@@ -22,12 +22,6 @@ class TaskModel(Model):
         uselist=False
     )
 
-    task_schedules = relationship(
-        'TaskScheduleModel',
-        back_populates='task',
-        cascade='all, delete-orphan'
-    )
-
     task_runs = relationship(
         'TaskRunModel',
         back_populates='task',
@@ -59,34 +53,6 @@ class TaskDownstreamModel(Model):
         return (
             f'<TaskDownstream(task_id={repr(self.task_id)}'
             f' downstream_task_id={repr(self.downstream_task_id)})>'
-        )
-
-
-class TaskScheduleModel(Model):
-    __tablename__ = TableName.TASK_SCHEDULE.value
-
-    id = column_uuid_primary_key()
-    flow_schedule_id = Column(UUID_STRING, ForeignKey('flow_schedules.id'), nullable=False)
-    task_id = Column(UUID_STRING, ForeignKey('tasks.id'), nullable=False)
-
-    created_datetime = column_current_datetime()
-
-    flow_schedule = relationship(
-        'FlowScheduleModel',
-        back_populates='task_schedules',
-        uselist=False
-    )
-
-    task = relationship(
-        'TaskModel',
-        back_populates='task_schedules',
-        uselist=False
-    )
-
-    def __repr__(self):
-        return (
-            f'<TaskSchedule(flow_schedule_id={repr(self.flow_schedule_id)}'
-            f' task_id={repr(self.task_id)})>'
         )
 
 

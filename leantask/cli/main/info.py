@@ -59,8 +59,9 @@ def show_flow_info() -> None:
                     .one()
                 )
                 print(
-                    f"- {flow_record.name} (path='{flow_record.path}'",
-                    f"next_schedule='{schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes')}')"
+                    f"- {flow_record.name} (path={repr(flow_record.path)}",
+                    f"next_schedule={repr(schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
+                    f"max_delay={flow_record.max_delay})",
                 )
 
             except NoResultFound:

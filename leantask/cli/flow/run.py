@@ -47,14 +47,14 @@ def run_flow(args: argparse.Namespace, flow) -> None:
             print('Flow is currently inactive.')
             raise SystemExit(FlowRunStatus.CANCELED)
 
-        cache_flow = args.cache['flow']
+        flow_run_cache = args.cache['flow']
 
-        if cache_flow.name != flow.name \
-                or cache_flow.checksum != flow.checksum:
+        if flow_run_cache['name'] != flow.name \
+                or flow_run_cache['checksum'] != flow.checksum:
             print('Flow from cache is different with the current flow.')
             raise SystemExit(FlowRunStatus.UNKNOWN)
 
-        flow = cache_flow
+        flow.add_run_from_cache(flow_run_cache)
 
     elif not args.force \
             and not args.local \
@@ -83,7 +83,6 @@ def run_flow(args: argparse.Namespace, flow) -> None:
         raise SystemExit(flow_run.status.value)
 
     except Exception as exc:
-        raise exc
         print(f'{exc.__class__.__name__}: {exc}')
         raise SystemExit(FlowRunStatus.FAILED.value)
 

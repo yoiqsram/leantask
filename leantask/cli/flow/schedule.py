@@ -4,6 +4,7 @@ from typing import Callable
 
 from ...context import GlobalContext
 from ...enum import FlowScheduleStatus
+from ...utils.string import generate_uuid
 
 
 def add_schedule_parser(subparsers) -> Callable:
@@ -51,7 +52,7 @@ def schedule_flow(args: Namespace, flow) -> None:
             update_schedule_to_db(
                 session,
                 flow_record=flow_record,
-                schedule_datetime=flow.next_schedule_datetime(),
+                schedule_datetime=schedule_datetime,
                 is_manual=args.now
             )
 
@@ -66,62 +67,69 @@ def update_schedule_to_db(
         schedule_datetime: datetime,
         is_manual: bool
     ) -> None:
-    from sqlalchemy import func
     from ...database.execute import copy_records_to_log, get_task_records_by_flow_id
-    from ...database.models import (
-        FlowScheduleModel, FlowRunModel,
-        TaskScheduleModel, TaskRunModel
-    )
-    from ...enum import FlowRunStatus
+    from ...database.models import FlowScheduleModel, FlowRunModel, TaskRunModel
+    from ...database.orm import NoResultFound
+    from ...enum import FlowRunStatus, TaskRunStatus
 
-    old_schedule_datetime = (
-        session.query(func.min(FlowScheduleModel.schedule_datetime))
-        .filter(FlowScheduleModel.id == flow_record.id)
-        .scalar()
-    )
-    if old_schedule_datetime is not None:
-        max_delay = timedelta(seconds=flow_record.max_delay if flow_record.max_delay is not None else 0)
-        if (old_schedule_datetime + max_delay) <= schedule_datetime:
-            print(
-                'Failed to set the new schedule. The flow has been scheduled at',
-                repr(old_schedule_datetime.isoformat(sep=' ', timespec='minutes')),
-                f'and has not been passing its max delay of {flow_record.max_delay} s.' \
-                    if flow_record.max_delay is not None \
-                    else 'and new schedule only can be set when it finish.',
-                end='.\n'
-            )
-            raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
-
-        flow_schedule_query = (
-            session.query(FlowScheduleModel)
+    try:
+        flow_schedule_record, flow_run_record = (
+            session.query(FlowScheduleModel, FlowRunModel)
+            .join(FlowRunModel, FlowRunModel.flow_schedule_id == FlowScheduleModel.id)
             .filter(FlowScheduleModel.flow_id == flow_record.id)
+            .one()
         )
-        flow_schedule_query.delete()
 
-    task_schedule_records = []
-    task_run_records = []
-    for task_record in get_task_records_by_flow_id(flow_record.id, session=session):
-        task_schedule_records.append(TaskScheduleModel(task_id=task_record.id))
-        task_run_records.append(TaskRunModel(task_id=task_record.id))
+        max_delay = timedelta(seconds=flow_record.max_delay if flow_record.max_delay is not None else 0)
+        if (flow_schedule_record.schedule_datetime + max_delay) <= datetime.now():
+            if flow_run_record.status in (
+                    FlowRunStatus.SCHEDULED.name, FlowRunStatus.SCHEDULED_BY_USER.name,
+                    FlowRunStatus.RUNNING.name, FlowRunStatus.UNKNOWN.name
+                    ):
+                print(
+                    'Failed to set the new schedule. The flow has been scheduled',
+                    'by scheduler'
+                        if flow_run_record.status == FlowRunStatus.SCHEDULED.name
+                        else 'manually',
+                    'at',
+                    repr(flow_schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes')),
+                    f'and has not been passing its max delay of {flow_record.max_delay} s.'
+                        if flow_record.max_delay is not None \
+                        else 'and new schedule only can be set when it finish.'
+                )
+
+                raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
+
+            print('Delete existing schedule.')
+            session.delete(flow_schedule_record)
+            session.commit()
+
+    except NoResultFound:
+        print('No result')
 
     flow_schedule_record = FlowScheduleModel(
+        id=generate_uuid(),
         flow_id=flow_record.id,
         schedule_datetime=schedule_datetime,
-        task_schedules=task_schedule_records,
         is_manual=is_manual
     )
     session.add(flow_schedule_record)
+
+    task_run_records = []
+    for task_record in get_task_records_by_flow_id(flow_record.id, session=session):
+        task_run_records.append(TaskRunModel(task_id=task_record.id, attempt=1, status=TaskRunStatus.PENDING.name))
 
     flow_run_record = FlowRunModel(
         flow_id=flow_record.id,
         schedule_datetime=schedule_datetime,
         status=FlowRunStatus.SCHEDULED_BY_USER.name if is_manual else FlowRunStatus.SCHEDULED.name,
-        flow_schedule_id=flow_schedule_record.id
+        flow_schedule_id=flow_schedule_record.id,
+        task_runs=task_run_records
     )
     session.add(flow_run_record)
     session.commit()
 
-    copy_records_to_log(flow_run_record)
+    copy_records_to_log([flow_run_record])
 
     print(
         'Successfully added a schedule at',

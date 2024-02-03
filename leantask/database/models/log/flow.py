@@ -16,7 +16,7 @@ class FlowLogModel(LogModel):
     name = Column(MEDIUM_STRING, primary_key=True, nullable=False)
     path = Column(BIG_STRING, nullable=False)
     checksum = column_md5()
-    max_delay = Column(Integer, nullable=False)
+    max_delay = Column(Integer)
     active = Column(Boolean, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)
@@ -45,7 +45,7 @@ class FlowRunLogModel(LogModel):
 
     id = column_uuid_primary_key()
     schedule_datetime = Column(DateTime)
-    max_delay = Column(Integer, nullable=False)
+    max_delay = Column(Integer)
     status = Column(SMALL_STRING, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)

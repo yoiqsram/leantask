@@ -14,8 +14,8 @@ class TaskModel(Model):
     id = column_uuid_primary_key()
     flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
     name = Column(MEDIUM_STRING, nullable=False)
-    retry_max = Column(Integer, server_default=0, nullable=False)
-    retry_delay = Column(Integer, server_default=0, nullable=False)
+    retry_max = Column(Integer, default=0, nullable=False)
+    retry_delay = Column(Integer, default=0, nullable=False)
 
     created_datetime = column_current_datetime()
 
@@ -60,8 +60,8 @@ class TaskRunModel(Model):
     flow_run_id = Column(UUID_STRING, ForeignKey('flow_runs.id'), nullable=False)
     task_id = Column(UUID_STRING, ForeignKey('tasks.id'), nullable=False)
     attempt = Column(Integer, nullable=False)
-    retry_max = Column(Integer, server_default=0, nullable=False)
-    retry_delay = Column(Integer, server_default=0, nullable=False)
+    retry_max = Column(Integer, default=0, nullable=False)
+    retry_delay = Column(Integer, default=0, nullable=False)
     status = Column(SMALL_STRING, nullable=False)
 
     created_datetime = column_current_datetime()

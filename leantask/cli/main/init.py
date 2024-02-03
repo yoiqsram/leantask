@@ -1,7 +1,7 @@
 import argparse
-from pathlib import Path
 
 from ...context import GlobalContext
+from ...logging import get_logger
 
 
 def add_init_parser(subparsers) -> None:
@@ -24,6 +24,11 @@ def add_init_parser(subparsers) -> None:
         action='store_true',
         help='Replace project if it already exists.'
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help=argparse.SUPPRESS
+    )
 
     return init_project
 
@@ -31,16 +36,16 @@ def add_init_parser(subparsers) -> None:
 def init_project(args: argparse.Namespace) -> None:
     from ...database.orm import create_metadata_database
 
+    logger = get_logger('cli.main.init')
+
     database_path = GlobalContext.database_path()
 
     if database_path.exists() and not args.replace:
-        raise SystemExit(
-            'Failed to initialize the project.\n'
-            f"There is already a project exists in '{GlobalContext.PROJECT_DIR}'."
+        logger.error(
+            'Failed to initialize the project.'
+            f" There is already a project exists in '{GlobalContext.PROJECT_DIR}'."
         )
-
-    if not GlobalContext.PROJECT_DIR.is_dir():
-        raise SystemExit(f"Project directory '{GlobalContext.PROJECT_DIR}' does not exists.")
+        raise SystemExit(1)
 
     create_metadata_database(
         project_name=args.name,
@@ -48,4 +53,4 @@ def init_project(args: argparse.Namespace) -> None:
         replace=args.replace
     )
 
-    print(f"Project created successfully on '{GlobalContext.PROJECT_DIR}'.")
+    logger.info(f"Project created successfully on '{GlobalContext.PROJECT_DIR}'.")

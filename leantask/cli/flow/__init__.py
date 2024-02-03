@@ -1,4 +1,4 @@
-from argparse import ArgumentParser, Namespace
+import argparse
 from pathlib import Path
 from typing import Callable, Dict, Tuple
 
@@ -12,8 +12,8 @@ from .schedule import add_schedule_parser
 
 def parse_args(
         description: str
-    ) -> Tuple[Namespace, Dict[str, Callable]]:
-    parser = ArgumentParser(description=description)
+    ) -> Tuple[argparse.Namespace, Dict[str, Callable]]:
+    parser = argparse.ArgumentParser(description=description)
     subparsers = parser.add_subparsers(
         dest='command',
         required=True,
@@ -42,8 +42,10 @@ def run_cli(flow) -> None:
 
     args, command_runners = parse_args(description=flow.description)
 
-    if 'project_dir' in args:
-        if args.project_dir is not None:
-            GlobalContext.set_project_dir(Path(args.project_dir).resolve())
+    if 'project_dir' in args and args.project_dir is not None:
+        GlobalContext.set_project_dir(Path(args.project_dir).resolve())
+
+    if 'debug' in args and args.debug:
+        GlobalContext.LOG_DEBUG = True
 
     command_runners[args.command](args, flow)

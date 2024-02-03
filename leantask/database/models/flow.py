@@ -16,7 +16,7 @@ class FlowModel(Model):
     name = Column(MEDIUM_STRING, primary_key=True)
     path = Column(BIG_STRING, nullable=False)
     checksum = column_md5()
-    max_delay = Column(Integer, server_default=0, nullable=False)
+    max_delay = Column(Integer)
     active = Column(Boolean, default=False, nullable=False)
 
     created_datetime = column_current_datetime()
@@ -72,7 +72,7 @@ class FlowRunModel(Model):
     id = column_uuid_primary_key()
     flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
     schedule_datetime = Column(DateTime)
-    max_delay = Column(Integer, server_default=0, nullable=False)
+    max_delay = Column(Integer)
     status = Column(SMALL_STRING, nullable=False)
 
     flow_schedule_id = Column(UUID_STRING)

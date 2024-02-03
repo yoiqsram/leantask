@@ -2,7 +2,6 @@ from ._base import (
     LogModel, Column, Integer, ForeignKey,
     SMALL_STRING, MEDIUM_STRING, UUID_STRING,
     column_uuid_primary_key, column_current_datetime,
-    unique_compound_constraint,
     relationship
 )
 from ....enum import LogTableName
@@ -32,10 +31,6 @@ class TaskLogModel(LogModel):
         'TaskRunLogModel',
         back_populates='task',
         cascade='all, delete-orphan'
-    )
-
-    __table_args__ = (
-        unique_compound_constraint(__tablename__, 'ref_flow_id', 'name'),
     )
 
     def __repr__(self) -> str:

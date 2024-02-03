@@ -9,9 +9,6 @@ def save_cache(obj: Any) -> str:
     cache_id = generate_uuid()
     cache_file_name = GlobalContext.cache_dir() / (cache_id + '.pkl')
 
-    if not GlobalContext.cache_dir().is_dir():
-        GlobalContext.cache_dir().mkdir(parents=True)
-
     with open(cache_file_name, 'wb') as f:
         pickle.dump(obj, f)
 

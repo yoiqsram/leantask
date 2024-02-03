@@ -1,13 +1,14 @@
-from argparse import ArgumentParser, Namespace
+import argparse
 from typing import Callable, Dict, Tuple
 
+from ...context import GlobalContext
 from .discover import add_discover_parser
 from .init import add_init_parser
 from .info import add_info_parser
 
 
-def parse_args() -> Tuple[Namespace, Dict[str, Callable]]:
-    parser = ArgumentParser(
+def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
+    parser = argparse.ArgumentParser(
         description='Leantask: Simple and lean workflow scheduler for Python.'
     )
     subparsers = parser.add_subparsers(
@@ -27,4 +28,8 @@ def parse_args() -> Tuple[Namespace, Dict[str, Callable]]:
 
 def cli():
     args, command_runners = parse_args()
+
+    if 'debug' in args and args.debug:
+        GlobalContext.LOG_DEBUG = True
+
     command_runners[args.command](args)

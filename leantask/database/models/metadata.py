@@ -3,6 +3,7 @@ from ._base import (
     column_uuid_primary_key, column_current_datetime, column_modified_datetime
 )
 from ...enum import TableName
+from ...utils.string import obj_repr
 
 
 class MetadataModel(Model):
@@ -13,10 +14,7 @@ class MetadataModel(Model):
     value = Column(BIG_STRING)
 
     created_datetime = column_current_datetime()
-    modified_datetime = column_current_datetime()
+    modified_datetime = column_modified_datetime()
 
-    def __repr__(self):
-        return (
-            f'<Metadata(name={repr(self.name)}'
-            f' value={repr(self.value)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'name', 'value')

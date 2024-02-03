@@ -4,6 +4,15 @@ import uuid
 SAFE_CHARS_PATTERN = r'^[a-zA-Z0-9-_.+,*`()$]+$'
 
 
+def obj_repr(obj, *attr_names) -> str:
+    obj_name = obj.__class__.__name__
+    return (
+        f'{obj_name}(' +
+        ' '.join(f'{attr_name}={repr(getattr(obj, attr_name))}' for attr_name in attr_names) +
+        f')'
+    )
+
+
 def validate_use_safe_chars(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError(

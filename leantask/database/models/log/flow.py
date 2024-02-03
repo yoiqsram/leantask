@@ -6,6 +6,7 @@ from ._base import (
     relationship
 )
 from ....enum import LogTableName
+from ....utils.string import obj_repr
 
 
 class FlowLogModel(LogModel):
@@ -15,8 +16,8 @@ class FlowLogModel(LogModel):
     name = Column(MEDIUM_STRING, primary_key=True, nullable=False)
     path = Column(BIG_STRING, nullable=False)
     checksum = column_md5()
-    max_delay = Column(Integer)
-    active = Column(Boolean, default=False, nullable=False)
+    max_delay = Column(Integer, nullable=False)
+    active = Column(Boolean, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)
 
@@ -35,12 +36,8 @@ class FlowLogModel(LogModel):
         cascade='all, delete-orphan'
     )
 
-    def __repr__(self):
-        return (
-            f'<FlowLog(name={repr(self.name)}'
-            f' path={repr(self.path)}'
-            f' active={repr(self.active)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'name', 'path', 'active')
 
 
 class FlowRunLogModel(LogModel):
@@ -48,6 +45,7 @@ class FlowRunLogModel(LogModel):
 
     id = column_uuid_primary_key()
     schedule_datetime = Column(DateTime)
+    max_delay = Column(Integer, nullable=False)
     status = Column(SMALL_STRING, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)
@@ -69,9 +67,5 @@ class FlowRunLogModel(LogModel):
         cascade='all, delete-orphan'
     )
 
-    def __repr__(self):
-        return (
-            f'<FlowRunLog(flow_id={repr(self.flow_id)}'
-            f' schedule_datetime={repr(self.schedule_datetime)}'
-            f' status={repr(self.status)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_id', 'schedule_datetime', 'max_delay', 'status')

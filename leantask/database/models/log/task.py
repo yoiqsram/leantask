@@ -6,6 +6,7 @@ from ._base import (
     relationship
 )
 from ....enum import LogTableName
+from ....utils.string import obj_repr
 
 
 class TaskLogModel(LogModel):
@@ -13,6 +14,8 @@ class TaskLogModel(LogModel):
 
     id = column_uuid_primary_key()
     name = Column(MEDIUM_STRING, nullable=False)
+    retry_max = Column(Integer, nullable=False)
+    retry_delay = Column(Integer, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)
     ref_flow_id = Column(UUID_STRING, ForeignKey('flows.ref_id'), nullable=False)
@@ -35,11 +38,8 @@ class TaskLogModel(LogModel):
         unique_compound_constraint(__tablename__, 'ref_flow_id', 'name'),
     )
 
-    def __repr__(self):
-        return (
-            f'<TaskLog(name={repr(self.name)}'
-            f' flow_id={repr(self.flow_id)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_id', 'name', 'retry_max')
 
 
 class TaskDownstreamLogModel(LogModel):
@@ -54,11 +54,8 @@ class TaskDownstreamLogModel(LogModel):
     task = relationship('TaskLogModel', foreign_keys=[ref_task_id])
     downstream_task = relationship('TaskLogModel', foreign_keys=[ref_downstream_task_id])
 
-    def __repr__(self):
-        return (
-            f'<TaskDownstream(task_id={repr(self.ref_task_id)}'
-            f' downstream_task_id={repr(self.ref_downstream_task_id)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'task_id', 'downstream_task_id')
 
 
 class TaskRunLogModel(LogModel):
@@ -66,6 +63,8 @@ class TaskRunLogModel(LogModel):
 
     id = column_uuid_primary_key()
     attempt = Column(Integer, nullable=False)
+    retry_max = Column(Integer, nullable=False)
+    retry_delay = Column(Integer, nullable=False)
     status = Column(SMALL_STRING, nullable=False)
 
     ref_id = Column(UUID_STRING, nullable=False)
@@ -86,10 +85,5 @@ class TaskRunLogModel(LogModel):
         uselist=False
     )
 
-    def __repr__(self):
-        return (
-            f'<TaskRunLog(flow_run_id={repr(self.flow_run_id)}'
-            f' task_id={repr(self.task_id)}'
-            f' attempt={repr(self.attempt)}'
-            f' status={repr(self.status)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_run_id', 'task_id', 'status', 'attempt', 'retry_max')

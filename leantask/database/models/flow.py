@@ -6,6 +6,7 @@ from ._base import (
     relationship
 )
 from ...enum import TableName
+from ...utils.string import obj_repr
 
 
 class FlowModel(Model):
@@ -15,7 +16,7 @@ class FlowModel(Model):
     name = Column(MEDIUM_STRING, primary_key=True)
     path = Column(BIG_STRING, nullable=False)
     checksum = column_md5()
-    max_delay = Column(Integer)
+    max_delay = Column(Integer, server_default=0, nullable=False)
     active = Column(Boolean, default=False, nullable=False)
 
     created_datetime = column_current_datetime()
@@ -40,12 +41,8 @@ class FlowModel(Model):
         cascade='all, delete-orphan'
     )
 
-    def __repr__(self):
-        return (
-            f'<Flow(name={repr(self.name)}'
-            f' path={repr(self.path)}'
-            f' active={repr(self.active)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'name', 'path', 'active')
 
 
 class FlowScheduleModel(Model):
@@ -65,12 +62,8 @@ class FlowScheduleModel(Model):
         uselist=False
     )
 
-    def __repr__(self):
-        return (
-            f'<FlowSchedule(flow_id={repr(self.flow_id)}'
-            f' schedule_datetime={repr(self.schedule_datetime)}'
-            f' is_manual={repr(self.is_manual)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_id', 'schedule_datetime', 'is_manual')
 
 
 class FlowRunModel(Model):
@@ -79,6 +72,7 @@ class FlowRunModel(Model):
     id = column_uuid_primary_key()
     flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
     schedule_datetime = Column(DateTime)
+    max_delay = Column(Integer, server_default=0, nullable=False)
     status = Column(SMALL_STRING, nullable=False)
 
     flow_schedule_id = Column(UUID_STRING)
@@ -98,9 +92,5 @@ class FlowRunModel(Model):
         cascade='all, delete-orphan'
     )
 
-    def __repr__(self):
-        return (
-            f'<FlowRun(flow_id={repr(self.flow_id)}'
-            f' schedule_datetime={repr(self.schedule_datetime)}'
-            f' status={repr(self.status)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_id', 'schedule_datetime', 'max_delay', 'status')

@@ -5,6 +5,7 @@ from ._base import (
     unique_compound_constraint, relationship
 )
 from ...enum import TableName
+from ...utils.string import obj_repr
 
 
 class TaskModel(Model):
@@ -13,6 +14,8 @@ class TaskModel(Model):
     id = column_uuid_primary_key()
     flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
     name = Column(MEDIUM_STRING, nullable=False)
+    retry_max = Column(Integer, server_default=0, nullable=False)
+    retry_delay = Column(Integer, server_default=0, nullable=False)
 
     created_datetime = column_current_datetime()
 
@@ -32,11 +35,8 @@ class TaskModel(Model):
         unique_compound_constraint(__tablename__, 'flow_id', 'name'),
     )
 
-    def __repr__(self):
-        return (
-            f'<Task(name={repr(self.name)}'
-            f' flow_id={repr(self.flow_id)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_id', 'name', 'retry_max')
 
 
 class TaskDownstreamModel(Model):
@@ -49,11 +49,8 @@ class TaskDownstreamModel(Model):
     task = relationship('TaskModel', foreign_keys=[task_id])
     downstream_task = relationship('TaskModel', foreign_keys=[downstream_task_id])
 
-    def __repr__(self):
-        return (
-            f'<TaskDownstream(task_id={repr(self.task_id)}'
-            f' downstream_task_id={repr(self.downstream_task_id)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'task_id', 'downstream_task_id')
 
 
 class TaskRunModel(Model):
@@ -63,6 +60,8 @@ class TaskRunModel(Model):
     flow_run_id = Column(UUID_STRING, ForeignKey('flow_runs.id'), nullable=False)
     task_id = Column(UUID_STRING, ForeignKey('tasks.id'), nullable=False)
     attempt = Column(Integer, nullable=False)
+    retry_max = Column(Integer, server_default=0, nullable=False)
+    retry_delay = Column(Integer, server_default=0, nullable=False)
     status = Column(SMALL_STRING, nullable=False)
 
     created_datetime = column_current_datetime()
@@ -84,10 +83,5 @@ class TaskRunModel(Model):
         unique_compound_constraint(__tablename__, 'flow_run_id', 'task_id', 'attempt'),
     )
 
-    def __repr__(self):
-        return (
-            f'<TaskRun(flow_run_id={repr(self.flow_run_id)}'
-            f' task_id={repr(self.task_id)}'
-            f' attempt={repr(self.attempt)}'
-            f' status={repr(self.status)})>'
-        )
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_run_id', 'task_id', 'status', 'attempt', 'retry_max')

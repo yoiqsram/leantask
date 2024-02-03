@@ -52,7 +52,7 @@ def index_metadata_to_db(flow, session, force: bool = False) -> None:
         )
 
         if flow_record.checksum == flow.checksum and not force:
-            print('Flow is already indexed.')
+            print(f"Flow '{flow_record.name}' is already indexed.")
             raise SystemExit(FlowIndexStatus.UNCHANGED.value)
 
         flow_record.name = flow.name

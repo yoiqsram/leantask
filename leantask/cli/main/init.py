@@ -45,7 +45,12 @@ def init_project(args: argparse.Namespace) -> None:
             sync_server_time()
             logger.debug('Successfully sync time.')
         except LookupError:
-            logger.debug('Failed to sync time.')
+            logger.warning('Failed to sync time to NTP server.')
+    else:
+        logger.warning(
+            'Failed to sync time due to lack of permission. Please sync your time using this command: '
+            'sudo ntpdate -s ntp.ubuntu.com'
+        )
 
     database_path = GlobalContext.database_path()
     if database_path.exists():
@@ -54,7 +59,7 @@ def init_project(args: argparse.Namespace) -> None:
             logger.error('Failed to initialize the project.')
             raise SystemExit(1)
 
-        logger.info('Project will be replaced.')
+        logger.debug('Project will be replaced.')
 
     create_metadata_database(
         project_name=args.name,

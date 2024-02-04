@@ -47,7 +47,11 @@ def calculate_md5(file_path: Union[str, Path]) -> str:
 def has_sudo_access() -> bool:
     try:
         null_device = '/dev/null'
-        subprocess.check_call(['sudo', '-n', 'echo', 'Check sudo access'], stdout=open(null_device, 'w'))
+        subprocess.check_call(
+            ['sudo', '-n', 'echo', 'Check sudo access'],
+            stdout=open(null_device, 'w'),
+            stderr=open(null_device, 'w')
+        )
         return True
 
     except subprocess.CalledProcessError:
@@ -55,7 +59,7 @@ def has_sudo_access() -> bool:
 
 
 def sync_server_time(url: str = 'time.windows.com') -> None:
-    result = subprocess.run('sudo ntpdate -s ' + url, shell=True)
+    result = subprocess.run('sudo -n ntpdate -s ' + url, shell=True)
     if result.returncode == 0:
         return
 

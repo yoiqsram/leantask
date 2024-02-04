@@ -1,6 +1,6 @@
-import asyncio
 import hashlib
 import inspect
+import subprocess
 import sys
 from pathlib import Path
 from typing import Union
@@ -42,3 +42,21 @@ def calculate_md5(file_path: Union[str, Path]) -> str:
         for chunk in iter(lambda: file.read(4096), b''):
             md5.update(chunk)
     return md5.hexdigest()
+
+
+def has_sudo_access() -> bool:
+    try:
+        null_device = '/dev/null'
+        subprocess.check_call(['sudo', '-n', 'echo', 'Check sudo access'], stdout=open(null_device, 'w'))
+        return True
+
+    except subprocess.CalledProcessError:
+        return False
+
+
+def sync_server_time(url: str = 'time.windows.com') -> None:
+    result = subprocess.run('sudo ntpdate -s ' + url, shell=True)
+    if result.returncode == 0:
+        return
+
+    raise LookupError('Failed to sync time to NTP server.')

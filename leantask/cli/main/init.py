@@ -2,6 +2,7 @@ import argparse
 
 from ...context import GlobalContext
 from ...logging import get_logger
+from ...utils.script import has_sudo_access, sync_server_time
 
 
 def add_init_parser(subparsers) -> None:
@@ -38,14 +39,22 @@ def init_project(args: argparse.Namespace) -> None:
 
     logger = get_logger('cli.main.init')
 
-    database_path = GlobalContext.database_path()
+    if has_sudo_access():
+        try:
+            logger.debug('Sync server time.')
+            sync_server_time()
+            logger.debug('Successfully sync time.')
+        except LookupError:
+            logger.debug('Failed to sync time.')
 
-    if database_path.exists() and not args.replace:
-        logger.error(
-            'Failed to initialize the project.'
-            f" There is already a project exists in '{GlobalContext.PROJECT_DIR}'."
-        )
-        raise SystemExit(1)
+    database_path = GlobalContext.database_path()
+    if database_path.exists():
+        logger.warning(f"There is already a project exists in '{GlobalContext.PROJECT_DIR}'.")
+        if not args.replace:
+            logger.error('Failed to initialize the project.')
+            raise SystemExit(1)
+
+        logger.info('Project will be replaced.')
 
     create_metadata_database(
         project_name=args.name,

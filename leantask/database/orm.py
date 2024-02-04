@@ -67,7 +67,6 @@ def create_metadata_database(
         GlobalContext.metadata_dir().mkdir(parents=True)
 
     if database_path.is_file() and replace:
-        print("There's already a project exists and it will be replaced.")
         os.rename(database_path, backup_database_path)
 
     if log_database_path.is_file() and replace:

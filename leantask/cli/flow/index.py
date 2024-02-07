@@ -20,6 +20,10 @@ def add_index_parser(subparsers) -> Callable:
         help=argparse.SUPPRESS
     )
     parser.add_argument(
+        '--project-dir', '-P',
+        help='Project directory. Default to current directory.'
+    )
+    parser.add_argument(
         '--debug',
         action='store_true',
         help=argparse.SUPPRESS
@@ -32,7 +36,7 @@ def index_flow(args: argparse.Namespace, flow) -> None:
     from ...database.orm import open_db_session
 
     global logger
-    logger = get_logger('cli.flow.index')
+    logger = get_logger('flow.index')
 
     try:
         with open_db_session(GlobalContext.database_path()) as session:
@@ -40,7 +44,7 @@ def index_flow(args: argparse.Namespace, flow) -> None:
 
     except Exception as exc:
         logger.info(f"Failed to index flow '{flow.path}'")
-        logger.error(f'{exc.__class__.__name__}: {exc}')
+        logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
         raise SystemExit(FlowIndexStatus.FAILED)
 
 

@@ -21,7 +21,7 @@ class GlobalContext:
     SCHEDULER_SESSION_ID: str = None
     CACHE_TIMEOUT: int = 1800
 
-    LOCAL_RUN: bool = True
+    LOCAL_RUN: bool = False
 
     @classmethod
     def set_project_dir(cls, value: Path) -> None:
@@ -91,8 +91,9 @@ class GlobalContext:
             return
 
         log_file_path = cls.log_dir() / cls.LOG_NAME
-        if not log_file_path.exists():
-            return
+        if not log_file_path.is_dir():
+            with open(log_file_path, 'w'):
+                pass
 
         return log_file_path
 

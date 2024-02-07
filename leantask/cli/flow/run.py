@@ -5,6 +5,7 @@ from typing import Callable
 from ...context import GlobalContext
 from ...enum import FlowRunStatus
 from ...logging import get_logger
+from ...utils.cache import load_cache
 from ...utils.script import get_confirmation
 
 logger = None
@@ -34,9 +35,8 @@ def add_run_parser(subparsers) -> Callable:
         help='NOT RECOMMENDED. Bypass any confirmation before run.'
     )
     parser.add_argument(
-        '--verbose', '-V',
-        action='store_true',
-        help='show run log'
+        '--project-dir', '-P',
+        help='Project directory. Default to current directory.'
     )
     parser.add_argument(
         '--debug',
@@ -49,7 +49,7 @@ def add_run_parser(subparsers) -> Callable:
 
 def run_flow(args: argparse.Namespace, flow) -> None:
     global logger
-    logger = get_logger('cli.flow.run')
+    logger = get_logger('flow.run')
 
     GlobalContext.LOCAL_RUN = args.local
 
@@ -59,7 +59,7 @@ def run_flow(args: argparse.Namespace, flow) -> None:
             logger.error('Flow is currently inactive.')
             raise SystemExit(FlowRunStatus.CANCELED.value)
 
-        flow_run_cache = args.cache['flow']
+        flow_run_cache = load_cache(args.cache)
 
         if flow_run_cache['name'] != flow.name \
                 or flow_run_cache['checksum'] != flow.checksum:
@@ -94,11 +94,11 @@ def run_flow(args: argparse.Namespace, flow) -> None:
         prepare_flow_for_manual_run(flow)
 
     try:
-        flow_run = flow.run(verbose=args.verbose)
+        flow_run = flow.run()
         raise SystemExit(flow_run.status.value)
 
     except Exception as exc:
-        logger.error(f'{exc.__class__.__name__}: {exc}')
+        logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
         raise SystemExit(FlowRunStatus.FAILED.value)
 
 

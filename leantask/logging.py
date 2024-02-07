@@ -3,7 +3,7 @@ import logging
 from .context import GlobalContext
 
 LOG_SHORT_FORMAT = '%(message)s'
-LOG_LONG_FORMAT = '[%(asctime)s] %(name)s - %(message)s'
+LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)s - %(name)s - %(message)s'
 
 
 class FlushFileHandler(logging.FileHandler):
@@ -37,5 +37,4 @@ def get_logger(name: str = None):
 
 def create_log_file(filename: str = None):
     GlobalContext.set_log_filename(filename)
-    with open(GlobalContext.get_log_file_path(), 'w'):
-        pass
+    return GlobalContext.get_log_file_path()

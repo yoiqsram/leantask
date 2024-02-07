@@ -42,7 +42,7 @@ class FlowModel(Model):
     )
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'name', 'path', 'active')
+        return obj_repr(self, 'id', 'name', 'path', 'active')
 
 
 class FlowScheduleModel(Model):
@@ -63,7 +63,7 @@ class FlowScheduleModel(Model):
     )
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'flow_id', 'schedule_datetime', 'is_manual')
+        return obj_repr(self, 'id', 'flow_id', 'schedule_datetime', 'is_manual')
 
 
 class FlowRunModel(Model):
@@ -93,4 +93,4 @@ class FlowRunModel(Model):
     )
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'flow_id', 'schedule_datetime', 'max_delay', 'status')
+        return obj_repr(self, 'id', 'flow_id', 'schedule_datetime', 'max_delay', 'status')

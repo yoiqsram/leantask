@@ -3,10 +3,14 @@ from typing import Callable
 
 
 def add_info_parser(subparsers) -> Callable:
-    subparsers.add_parser(
+    parser = subparsers.add_parser(
         'info',
         help='show flow information',
         description='show flow information'
+    )
+    parser.add_argument(
+        '--project-dir', '-P',
+        help='Project directory. Default to current directory.'
     )
     return show_info
 

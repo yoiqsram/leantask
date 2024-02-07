@@ -23,6 +23,10 @@ def add_schedule_parser(subparsers) -> Callable:
         help='schedule task to run now'
     )
     parser.add_argument(
+        '--project-dir', '-P',
+        help='Project directory. Default to current directory.'
+    )
+    parser.add_argument(
         '--debug',
         action='store_true',
         help=argparse.SUPPRESS
@@ -36,7 +40,7 @@ def schedule_flow(args: argparse.Namespace, flow) -> None:
     from ...database.orm import open_db_session, NoResultFound
 
     global logger
-    logger = get_logger('cli.flow.schedule')
+    logger = get_logger('flow.schedule')
 
     if not flow.active:
         logger.error('Failed to set the new schedule. Flow is inactive.')
@@ -79,7 +83,7 @@ def schedule_flow(args: argparse.Namespace, flow) -> None:
             )
 
     except Exception as exc:
-        logger.error(f'{exc.__class__.__name__}: {exc}')
+        logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
         raise SystemExit(FlowScheduleStatus.FAILED.value)
 
 
@@ -118,9 +122,9 @@ def update_schedule_to_db(
                     else ' manually') +
                 ' at' +
                 repr(flow_schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes')) +
-                f' and has not been passing its max delay of {flow_record.max_delay} s.'
+                (f' and has not been passing its max delay of {flow_record.max_delay} s.'
                     if flow_record.max_delay is not None \
-                    else ' and new schedule only can be set when it finish.'
+                    else ' and new schedule only can be set when it finish.')
             )
             raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
 

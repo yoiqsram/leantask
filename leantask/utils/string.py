@@ -8,7 +8,7 @@ def obj_repr(obj, *attr_names) -> str:
     obj_name = obj.__class__.__name__
     return (
         f'{obj_name}(' +
-        ' '.join(f'{attr_name}={repr(getattr(obj, attr_name))}' for attr_name in attr_names) +
+        ', '.join(f'{attr_name}={repr(getattr(obj, attr_name))}' for attr_name in attr_names) +
         f')'
     )
 

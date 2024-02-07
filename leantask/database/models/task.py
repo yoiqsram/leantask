@@ -36,7 +36,7 @@ class TaskModel(Model):
     )
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'flow_id', 'name', 'retry_max')
+        return obj_repr(self, 'id', 'flow_id', 'name', 'retry_max')
 
 
 class TaskDownstreamModel(Model):
@@ -50,7 +50,7 @@ class TaskDownstreamModel(Model):
     downstream_task = relationship('TaskModel', foreign_keys=[downstream_task_id])
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'task_id', 'downstream_task_id')
+        return obj_repr(self, 'id', 'task_id', 'downstream_task_id')
 
 
 class TaskRunModel(Model):
@@ -84,4 +84,4 @@ class TaskRunModel(Model):
     )
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'flow_run_id', 'task_id', 'status', 'attempt', 'retry_max')
+        return obj_repr(self, 'id', 'flow_run_id', 'task_id', 'status', 'attempt', 'retry_max')

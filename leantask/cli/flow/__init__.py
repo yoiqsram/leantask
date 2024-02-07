@@ -19,10 +19,6 @@ def parse_args(
         required=True,
         help='Command to run.'
     )
-    parser.add_argument(
-        '--project-dir', '-P',
-        help='Project directory. Default to current directory.'
-    )
 
     command_runners = {
         'info': add_info_parser(subparsers),

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Set, Union
 
 from ..database.sqlite.execute import update_task_run_status_to_db
-from ..context import GlobalContext
 from ..enum import TaskRunStatus
-from ..utils.string import generate_uuid, validate_use_safe_chars
+from ..logging import get_logger
+from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
 from .context import FlowContext, TaskContext
 from .output import UndefinedTaskOutput, TaskOutputFile
 
@@ -19,17 +19,25 @@ class TaskRun:
             flow_run,
             task: Task,
             attempt: int = 1,
-            status: TaskRunStatus = TaskRunStatus.UNKNOWN,
-            __id: str = None
+            retry_max: int = None,
+            retry_delay: int = None,
+            status: TaskRunStatus = TaskRunStatus.PENDING,
+            run_id: str = None
         ) -> None:
-        self.id = __id if __id is not None else generate_uuid()
+        self.id = run_id if run_id is not None else generate_uuid()
         self.task = task
         self.flow_run = flow_run
         self.attempt = attempt
+        self.retry_max = retry_max if retry_max is not None else task.retry_max
+        self.retry_delay = retry_delay if retry_delay is not None else task.retry_delay
         self.created_datetime: datetime = datetime.now()
         self.modified_datetime: datetime = self.created_datetime
 
         self._status = status
+
+    @property
+    def task_name(self) -> str:
+        return self.task.name
 
     @property
     def status(self) -> TaskRunStatus:
@@ -75,7 +83,12 @@ class TaskRun:
 
         except Exception as exc:
             self.status = TaskRunStatus.FAILED
-            print(f'{type(exc).__name__}:', exc)
+
+            logger = get_logger(f'task ({self.flow_run.flow.name} - {self.task.name})')
+            logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
+
+    def __repr__(self) -> str:
+        return obj_repr(self, 'task_name', 'attempt', 'status')
 
 
 class Task:
@@ -121,6 +134,7 @@ class Task:
 
     @name.setter
     def name(self, value: str) -> None:
+        validate_use_safe_chars(value)
         self._name = value
 
     @property
@@ -186,6 +200,9 @@ class Task:
 
         obj._downstreams.add(self)
         self._upstreams.add(obj)
+
+    def __repr__(self) -> str:
+        return obj_repr(self, 'name', 'retry_max', 'retry_delay')
 
     def __rshift__(self, obj: Union[Task, Iterable[Task]]) -> Union[Task, Iterable[Task]]:
         '''Task can be required by another Task or tuple/list of Task.'''

@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Generator, List, Union
 
-from ..enum import TaskRunStatus
+from ..enum import FlowRunStatus
 from ..context import GlobalContext
 from ..utils.string import generate_uuid
 from .models import (
@@ -57,63 +57,67 @@ def create_scheduler_session(
     ) -> None:
     session_id = generate_uuid()
 
-    log_dir = GlobalContext.log_dir()
-    if not log_dir.is_dir():
-        log_dir.mkdir(parents=True)
+    log_file_path = GlobalContext.get_log_file_path()
 
     scheduler_session_record = SchedulerSessionModel(
         id=session_id,
         heartbeat=heartbeat,
         worker=worker,
-        log_path=str(log_dir / (session_id + '.log'))
+        log_path=str(log_file_path)
     )
     session.add(scheduler_session_record)
     session.commit()
 
     GlobalContext.set_scheduler_session_id(scheduler_session_record.id)
+    return session_id
 
 
 @db_session(GlobalContext.database_path())
 def get_scheduled_run_tasks(
-        __datetime: datetime = None,
+        _datetime: datetime = None,
         session: Session = None
     ) -> Dict[Path, Dict[str, Union[str, List[str]]]]:
-    if __datetime is None:
-        __datetime = datetime.now()
+    if _datetime is None:
+        _datetime = datetime.now()
 
     select_columns = (
         FlowModel.path,
         FlowModel.name,
         FlowModel.checksum,
         FlowScheduleModel.id,
-        FlowScheduleModel.schedule_datetime,
         FlowRunModel.id,
         FlowRunModel.status,
+        FlowRunModel.schedule_datetime,
+        FlowRunModel.max_delay,
         TaskModel.name,
-        # TaskScheduleModel.id,
         TaskRunModel.id,
         TaskRunModel.status,
-        TaskRunModel.attempt
+        TaskRunModel.attempt,
+        TaskRunModel.retry_max,
+        TaskRunModel.retry_delay
     )
     schedule_records = (
         session.query(*select_columns)
         .select_from(FlowModel)
-        .join(FlowModel.flow_schedule)
-        .join(FlowModel.flow_runs)
-        .join(FlowModel.tasks)
-        .join(TaskModel.task_schedules)
-        .join(TaskModel.task_runs)
+        .join(FlowScheduleModel, FlowScheduleModel.flow_id == FlowModel.id, isouter=True)
+        .join(FlowRunModel, FlowRunModel.flow_id == FlowModel.id)
+        .join(TaskRunModel, TaskRunModel.flow_run_id == FlowRunModel.id)
+        .join(TaskModel, TaskModel.id == TaskRunModel.task_id)
         .filter(
             FlowModel.active == True,
-            FlowScheduleModel.schedule_datetime <= __datetime,
-            TaskRunModel.status == TaskRunStatus.PENDING.name
+            FlowRunModel.schedule_datetime <= _datetime,
+            FlowRunModel.status.in_((
+                FlowRunStatus.SCHEDULED.name,
+                FlowRunStatus.SCHEDULED_BY_USER.name,
+                FlowRunStatus.RUNNING.name
+            ))
         )
         .all()
     )
 
     flow_task_schedules = dict()
-    for (path, name, checksum, schedule_id, schedule_datetime, run_id, run_status,
-            task_name, task_schedule_id, task_run_id, task_run_status, task_attempt
+    for (path, name, checksum, schedule_id, run_id, run_status, schedule_datetime, run_max_delay,
+            task_name, task_run_id, task_run_status, task_run_attempt, task_run_retry_max, task_run_retry_delay
             ) in schedule_records:
         path = Path(path)
         if path not in flow_task_schedules:
@@ -124,13 +128,15 @@ def get_scheduled_run_tasks(
                 'schedule_datetime': schedule_datetime,
                 'id': run_id,
                 'status': run_status,
+                'max_delay': run_max_delay,
                 'tasks': dict()
             }
 
         flow_task_schedules[path]['tasks'][task_name] = {
-            'schedule_id': task_schedule_id,
             'id': task_run_id,
-            'attempt': task_attempt,
+            'attempt': task_run_attempt,
+            'retry_max': task_run_retry_max,
+            'retry_delay': task_run_retry_delay,
             'status': task_run_status
         }
 

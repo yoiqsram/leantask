@@ -7,12 +7,16 @@ from time import sleep
 from typing import Dict, List, Set, Union
 
 from ..database.sqlite.execute import update_flow_run_status_to_db
+from ..context import GlobalContext
 from ..enum import FlowRunStatus, TaskRunStatus
+from ..logging import get_logger
 from ..utils.script import calculate_md5
-from ..utils.string import generate_uuid, validate_use_safe_chars
+from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
 from .context import FlowContext
 from .schedule import Schedule
 from .task import Task, TaskRun
+
+logger = None
 
 
 class FlowRun:
@@ -20,13 +24,15 @@ class FlowRun:
             self,
             flow: Flow,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
-            __id: str = None,
-            __schedule_id: str = None,
-            __schedule_datetime: datetime = None
+            max_delay: int = None,
+            run_id: str = None,
+            schedule_id: str = None,
+            schedule_datetime: datetime = None
         ) -> None:
-        self.id = __id if __id is not None else generate_uuid()
-        self.schedule_id = __schedule_id
-        self.schedule_datetime = __schedule_datetime
+        self.id = run_id if run_id is not None else generate_uuid()
+        self.schedule_id = schedule_id
+        self.schedule_datetime = schedule_datetime
+        self.max_delay = max_delay if max_delay is not None else flow.max_delay
 
         self.flow = flow
         self.created_datetime = datetime.now()
@@ -35,6 +41,10 @@ class FlowRun:
         self._tasks_ordered = flow.tasks_ordered
         self._task_runs: Dict[Task, TaskRun] = dict()
         self._status = status
+
+    @property
+    def flow_name(self) -> str:
+        return self.flow.name
 
     @property
     def tasks_ordered(self) -> List[Task]:
@@ -60,26 +70,27 @@ class FlowRun:
                 f"'{self._status.name}' to '{value.name}'."
             )
 
-        if value in (
+        self._status = value
+        self.modified_datetime = datetime.now()
+        update_flow_run_status_to_db(self)
+
+        if self._status in (
                 FlowRunStatus.SCHEDULED,
                 FlowRunStatus.SCHEDULED_BY_USER,
                 FlowRunStatus.RUNNING
             ):
             for task in self.tasks_ordered:
                 task_run = self.get_task_run(task)
-                task_run.status = TaskRunStatus.PENDING
+                if task_run.status != TaskRunStatus.PENDING:
+                    task_run.status = TaskRunStatus.PENDING
 
-        elif value in (
+        elif self._status in (
                 FlowRunStatus.CANCELED,
                 FlowRunStatus.CANCELED_BY_USER
             ):
             for _, task_run in self._task_runs.values():
                 if task_run.status == TaskRunStatus.PENDING:
                     task_run.status = TaskRunStatus.CANCELED
-
-        self._status = value
-        self.modified_datetime = datetime.now()
-        update_flow_run_status_to_db(self)
 
     def total_seconds(self) -> Union[float, None]:
         if self._status in (
@@ -92,26 +103,31 @@ class FlowRun:
             self,
             task: Task,
             attempt: int = 1,
+            retry_max: int = None,
+            retry_delay: int = None,
             status: TaskRunStatus = TaskRunStatus.UNKNOWN,
-            __id: str = None,
-            __schedule_id: str = None
+            run_id: str = None
         ) -> TaskRun:
         if task in self._task_runs:
             attempt = self._task_runs[task].attempt + 1 if attempt is None else attempt
 
         task_run = TaskRun(
             self,
-            task,
+            task=task,
             attempt=attempt,
+            retry_max=retry_max,
+            retry_delay=retry_delay,
             status=status,
-            __id=__id,
-            __schedule_id=None
+            run_id=run_id
         )
         self._task_runs[task] = task_run
         return task_run
 
     def get_task_run(self, task: Task) -> TaskRun:
         return self._task_runs[task]
+
+    def __repr__(self) -> str:
+        return obj_repr(self, 'flow_name', 'status')
 
 
 class Flow:
@@ -125,12 +141,12 @@ class Flow:
             end_datetime: datetime = None,
             max_delay: int = None,
             active: bool = True,
-            __id: str = None
+            flow_id: str = None
         ) -> None:
         if FlowContext.__defined__ is not None:
             raise RuntimeError('You can only define one flow.')
 
-        self.id = __id if __id is not None else generate_uuid()
+        self.id = flow_id if flow_id is not None else generate_uuid()
         self.name = name
         self.description = description
         self.schedule = Schedule(cron_schedules, start_datetime, end_datetime)
@@ -141,7 +157,7 @@ class Flow:
         self._checksum = calculate_md5(self._path)
 
         self._tasks: Set[Task] = set()
-        self._runs: Set[FlowRun] = []
+        self._runs: List[FlowRun] = []
 
         FlowContext.__defined__ = self
 
@@ -187,16 +203,32 @@ class Flow:
 
         return ordered_tasks[::-1]
 
+    @property
+    def runs(self) -> List[FlowRun]:
+        return self._runs
+
+    def add_task(self, task: Task) -> None:
+        '''Add task to the flow.'''
+        task_names = set(task.name for task in self._tasks)
+        for task in task.iter_downstream():
+            if task.name in task_names:
+                raise ValueError(f"'{task.name}' is already registered in the flow.")
+
+            task_names.add(task.name)
+            self._tasks.add(task)
+            task._flow = self
+
     def add_run(self, flow_run: FlowRun) -> None:
-        self._runs.add(flow_run)
+        self._runs.append(flow_run)
 
     def add_run_from_cache(self, cache: Dict[str, Union[str, Dict[str, str]]]) -> None:
         flow_run = FlowRun(
             self,
-            status=cache['status'],
-            __id=cache['id'],
-            __schedule_id=cache['schedule_id'],
-            __schedule_datetime=cache['schedule_datetime'],
+            status=getattr(FlowRunStatus, cache['status']),
+            max_delay=cache['max_delay'],
+            run_id=cache['id'],
+            schedule_id=cache.get('schedule_id'),
+            schedule_datetime=cache.get('schedule_datetime')
         )
 
         tasks = {task.name: task for task in flow_run.tasks_ordered}
@@ -204,19 +236,113 @@ class Flow:
             flow_run.create_task_run(
                 tasks[task_name],
                 attempt=task_run['attempt'],
-                status=task_run['status'],
-                __id=task_run['id'],
-                __schedule_id=task_run['schedule_id']
+                retry_max=task_run.get('retry_max'),
+                retry_delay=task_run.get('retry_delay'),
+                status=getattr(TaskRunStatus, task_run['status']),
+                run_id=task_run['id']
             )
 
-        self._runs.add(flow_run)
+        self._runs.append(flow_run)
 
-    @property
-    def runs(self) -> List[FlowRun]:
-        return self._runs
+    def run(self) -> FlowRun:
+        '''Run flow.'''
+        global logger
+        if logger is None:
+            logger = get_logger(f'flow ({GlobalContext.relative_path(self.path)})')
+
+        if len(self.runs) == 0 \
+                or self.runs[-1].status in (
+                    FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
+                    FlowRunStatus.DONE, FlowRunStatus.FAILED
+                ):
+            logger.debug('Prepare for new run.')
+            flow_run = FlowRun(self)
+            for task in flow_run.tasks_ordered:
+                flow_run.create_task_run(task)
+            flow_run.status = FlowRunStatus.RUNNING
+
+        else:
+            logger.debug('Continue from last run.')
+            flow_run = self.runs[-1]
+
+            if flow_run.status in (
+                    FlowRunStatus.SCHEDULED,
+                    FlowRunStatus.SCHEDULED_BY_USER,
+                ):
+                flow_run.status = FlowRunStatus.RUNNING
+
+        if flow_run.status != FlowRunStatus.RUNNING:
+            logger.warning(
+                f"Flow run is flagged as '{flow_run.status.name}' not '{FlowRunStatus.RUNNING.name}',"
+                f" thus it will not be run."
+            )
+            return flow_run
+
+        logger.debug('Prepare task run based on task order.')
+        has_failed = False
+        for task in flow_run.tasks_ordered:
+            logger.debug(f"Prepare task run for '{task.name}'.")
+            task_run = flow_run.get_task_run(task)
+
+            if task_run.status != TaskRunStatus.PENDING:
+                logger.debug(
+                    f"Task '{task.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
+                    f" thus it will not be run."
+                )
+                continue
+
+            while True:
+                logger.debug(f"Execute task '{task.name}'.")
+                task_run.execute()
+
+                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
+                    logger.debug(f"Task '{task.name}' has been flagged as '{task_run.status.name}'.")
+                    break
+
+                if task_run.attempt > task_run.retry_max:
+                    logger.debug(
+                        f"Task '{task.name}' has run for {task_run.attempt} time(s)"
+                        f" and reaching the maximum attempt of {task_run.retry_max}."
+                    )
+                    break
+
+                logger.debug(f"Wait for {task_run.retry_delay} s before retrying.")
+                sleep(task_run.retry_delay)
+                logger.debug(f"Prepare new task run for '{task.name}' ({task_run.attempt + 1}).")
+                task_run = flow_run.create_task_run(task, attempt=task_run.attempt + 1)
+
+            if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
+                logger.debug(f"Task '{task.name}' has failed on all of its attempts.")
+                has_failed = True
+                for downstream_task in task.iter_downstream():
+                    if downstream_task == task:
+                        continue
+
+                    logger.debug(
+                        f"Set task '{downstream_task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
+                    )
+                    downstream_task_run = flow_run.get_task_run(downstream_task)
+                    downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
+
+        if has_failed:
+            logger.debug(
+                f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
+            )
+            flow_run.status = FlowRunStatus.FAILED
+        else:
+            logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
+            flow_run.status = FlowRunStatus.DONE
+
+        return flow_run
+
+    def next_schedule_datetime(self) -> Union[None, datetime]:
+        # from datetime import timedelta
+        # now = datetime.now() + timedelta(minutes=15)
+        # return datetime(year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute)
+        return
 
     def __repr__(self) -> str:
-        return f'<Flow name={self.name}>'
+        return obj_repr(self, 'name', 'path', 'active')
 
     def __enter__(self) -> Flow:
         if FlowContext.__active__ is not None:
@@ -230,83 +356,7 @@ class Flow:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         FlowContext.__active__ = None
-        self.cli()
 
-    def cli(self) -> None:
         from ..cli.flow import run_cli
 
         run_cli(self)
-
-    def add_task(self, task: Task) -> None:
-        '''Add task to the flow.'''
-        task_names = set(task.name for task in self._tasks)
-        for task in task.iter_downstream():
-            if task.name in task_names:
-                raise ValueError(f"'{task.name}' is already registered in the flow.")
-
-            task_names.add(task.name)
-            self._tasks.add(task)
-            task._flow = self
-
-    def run(
-            self,
-            verbose: bool = False
-        ) -> FlowRun:
-        '''Run flow.'''
-        if len(self.runs) == 0 \
-                or self.runs[-1].status not in (
-                    FlowRunStatus.SCHEDULED, FlowRunStatus.SCHEDULED_BY_USER,
-                    FlowRunStatus.RUNNING, FlowRunStatus.UNKNOWN
-                ):
-            flow_run = FlowRun(self)
-            for task in flow_run.tasks_ordered:
-                flow_run.create_task_run(task)
-            flow_run.status = FlowRunStatus.RUNNING
-
-        else:
-            flow_run = self.runs[-1]
-
-            if flow_run.status in (
-                    FlowRunStatus.SCHEDULED,
-                    FlowRunStatus.SCHEDULED_BY_USER,
-                ):
-                flow_run.status = FlowRunStatus.RUNNING
-
-        if flow_run.status != FlowRunStatus.RUNNING:
-            return flow_run
-
-        has_failed = False
-        for task in flow_run.tasks_ordered:
-            task_run = flow_run.get_task_run(task)
-
-            if task_run.status != TaskRunStatus.PENDING:
-                continue
-
-            while True:
-                # print(task_run.task.name, task_run.attempt)
-                task_run.execute()
-
-                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED) \
-                    or task_run.attempt > task.retry_max:
-                    break
-
-                sleep(task.retry_delay)
-                task_run = flow_run.create_task_run(task, attempt=task_run.attempt + 1)
-
-            if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-                has_failed = True
-                for downstream_task in task.iter_downstream():
-                    if downstream_task == task:
-                        continue
-
-                    downstream_task_run = flow_run.get_task_run(downstream_task)
-                    downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
-
-        flow_run.status = FlowRunStatus.DONE if not has_failed else FlowRunStatus.FAILED
-        return flow_run
-
-    def next_schedule_datetime(self) -> Union[None, datetime]:
-        # from datetime import timedelta
-        # now = datetime.now() + timedelta(minutes=15)
-        # return datetime(year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute)
-        return

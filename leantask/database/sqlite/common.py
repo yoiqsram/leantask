@@ -50,7 +50,6 @@ def _query(
         cursor.execute(query, parameters)
 
     except Exception as exc:
-        print(type(exc), exc)
         print('Error while executing query:', query, sep='/n')
         raise exc
 
@@ -101,9 +100,28 @@ def _update(
     cursor.close()
 
 
+def _delete(
+        table_name: str,
+        items_filter: Dict[str, Union[float, int, str]],
+        connection: sqlite3.Connection = None
+    ) -> None:
+    cursor = connection.cursor()
+    columns_filter = tuple(items_filter.keys())
+    values_filter = tuple(_parse_value(value) for value in items_filter.values())
+
+    query = f'''\
+        DELETE FROM {table_name}
+        WHERE {', '.join([f"{column} = ?" for column in columns_filter])}
+    '''
+    cursor.execute(dedent(query), values_filter)
+    connection.commit()
+    cursor.close()
+
+
 query = sqlite_connect(GlobalContext.database_path())(_query)
 insert = sqlite_connect(GlobalContext.database_path())(_insert)
 update = sqlite_connect(GlobalContext.database_path())(_update)
+delete = sqlite_connect(GlobalContext.database_path())(_delete)
 
 log_query = sqlite_connect(GlobalContext.log_database_path())(_query)
 log_insert = sqlite_connect(GlobalContext.log_database_path())(_insert)

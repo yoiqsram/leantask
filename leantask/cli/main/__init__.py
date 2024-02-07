@@ -5,6 +5,7 @@ from ...context import GlobalContext
 from .discover import add_discover_parser
 from .init import add_init_parser
 from .info import add_info_parser
+from .scheduler import add_scheduler_parser
 
 
 def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
@@ -20,7 +21,8 @@ def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
     command_runners = {
         'init': add_init_parser(subparsers),
         'info': add_info_parser(subparsers),
-        'discover': add_discover_parser(subparsers)
+        'discover': add_discover_parser(subparsers),
+        'scheduler': add_scheduler_parser(subparsers)
     }
 
     return parser.parse_args(), command_runners

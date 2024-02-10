@@ -10,7 +10,7 @@ from ..enum import TaskRunStatus
 from ..logging import get_task_run_logger
 from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
 from .context import FlowContext, TaskContext
-from .output import UndefinedTaskOutput, TaskOutputFile
+from .output import FileTaskOutput, ObjectTaskOutput, TaskOutput, UndefinedTaskOutput
 
 
 class TaskRun:
@@ -181,20 +181,20 @@ class Task:
             if isinstance(task._output, UndefinedTaskOutput):
                 raise ValueError(f"Task '{task.name}' has no output.")
 
-            elif isinstance(task._output, TaskOutputFile):
+            elif isinstance(task._output, FileTaskOutput):
                 if not task._output.exists():
                     raise ValueError(f"Output file from task '{task.name}' is not exists.")
 
             task_inputs[task.name] = task._output
 
-        return {task.name: task._output for task in self._upstreams}
+        return task_inputs
 
-    def output(self, obj: Any = None) -> Any:
+    def output(self) -> TaskOutput:
         '''Get output of this task.'''
         if self.output_path is None:
-            self._output = obj
+            self._output = ObjectTaskOutput()
         else:
-            self._output = TaskOutputFile(self.output_path)
+            self._output = FileTaskOutput(self.output_path)
 
         return self._output
 
@@ -284,9 +284,12 @@ def task(
                         attrs=attrs,
                         flow=task_flow
                     )
-
                     self.task_args = task_args
                     self.task_kwargs = task_kwargs
+
+                def run(self, logger: logging.Logger):
+                    if 'logger' in func.__code__.co_varnames:
+                        self.task_kwargs['logger'] = logger
 
                     if 'attrs' in func.__code__.co_varnames:
                         self.task_kwargs['attrs'] = self.attrs
@@ -294,17 +297,12 @@ def task(
                     if 'inputs' in func.__code__.co_varnames:
                         self.task_kwargs['inputs'] = self.inputs()
 
-                def run(self, logger: logging.Logger):
-                    if 'logger' in func.__code__.co_varnames:
-                        self.task_kwargs['logger'] = logger
-
-                    output = func(*self.task_args, **self.task_kwargs)
-
+                    output_obj = func(*self.task_args, **self.task_kwargs)
                     if output_file:
                         with self.output().open('w') as f:
-                            f.write(output)
+                            f.write(output_obj)
                     else:
-                        self.output(output)
+                        self.output().set(output_obj)
 
             return PythonTask()
 

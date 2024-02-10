@@ -8,7 +8,6 @@ def foo(logger: logging.Logger):
     output_data = {
         'message': 'This message is the output from foo task.'
     }
-    logger.info(f'Output: {output_data}')
     return output_data
 
 

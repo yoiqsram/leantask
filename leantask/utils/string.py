@@ -1,7 +1,12 @@
 import re
 import uuid
+from typing import Any
 
 SAFE_CHARS_PATTERN = r'^[a-zA-Z0-9-_.+,*`()$]+$'
+
+
+def quote(obj: Any) -> str:
+    return '"' + str(obj) + '"'
 
 
 def obj_repr(obj, *attr_names) -> str:

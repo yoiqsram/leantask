@@ -4,7 +4,6 @@ from typing import Dict, Generator, List, Union
 
 from ..enum import FlowRunStatus
 from ..context import GlobalContext
-from ..utils.string import generate_uuid
 from .models import (
     FlowModel, FlowScheduleModel, FlowRunModel,
     TaskModel, TaskDownstreamModel, TaskRunModel,
@@ -51,14 +50,12 @@ def get_task_records_by_flow_id(
 
 @db_session(GlobalContext.log_database_path())
 def create_scheduler_session(
+        session_id: str,
         heartbeat: int,
         worker: int,
+        log_file_path: Path,
         session: Session = None
     ) -> None:
-    session_id = generate_uuid()
-
-    log_file_path = GlobalContext.get_log_file_path()
-
     scheduler_session_record = SchedulerSessionModel(
         id=session_id,
         heartbeat=heartbeat,
@@ -81,6 +78,7 @@ def get_scheduled_run_tasks(
         _datetime = datetime.now()
 
     select_columns = (
+        FlowModel.id,
         FlowModel.path,
         FlowModel.name,
         FlowModel.checksum,
@@ -89,6 +87,7 @@ def get_scheduled_run_tasks(
         FlowRunModel.status,
         FlowRunModel.schedule_datetime,
         FlowRunModel.max_delay,
+        TaskModel.id,
         TaskModel.name,
         TaskRunModel.id,
         TaskRunModel.status,
@@ -116,24 +115,26 @@ def get_scheduled_run_tasks(
     )
 
     flow_task_schedules = dict()
-    for (path, name, checksum, schedule_id, run_id, run_status, schedule_datetime, run_max_delay,
-            task_name, task_run_id, task_run_status, task_run_attempt, task_run_retry_max, task_run_retry_delay
+    for (flow_id, path, name, checksum, schedule_id, run_id, run_status, schedule_datetime, run_max_delay,
+            task_id, task_name, task_run_id, task_run_status, task_run_attempt, task_run_retry_max, task_run_retry_delay
             ) in schedule_records:
         path = Path(path)
         if path not in flow_task_schedules:
             flow_task_schedules[path] = {
+                'id': flow_id,
                 'name': name,
                 'checksum': checksum,
                 'schedule_id': schedule_id,
                 'schedule_datetime': schedule_datetime,
-                'id': run_id,
+                'run_id': run_id,
                 'status': run_status,
                 'max_delay': run_max_delay,
                 'tasks': dict()
             }
 
         flow_task_schedules[path]['tasks'][task_name] = {
-            'id': task_run_id,
+            'id': task_id,
+            'run_id': task_run_id,
             'attempt': task_run_attempt,
             'retry_max': task_run_retry_max,
             'retry_delay': task_run_retry_delay,

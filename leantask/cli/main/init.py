@@ -1,8 +1,10 @@
 import argparse
+import sys
 
 from ...context import GlobalContext
-from ...logging import get_logger
+from ...logging import get_local_logger
 from ...utils.script import has_sudo_access, sync_server_time
+from ...utils.string import quote
 
 
 def add_init_parser(subparsers) -> None:
@@ -37,7 +39,9 @@ def add_init_parser(subparsers) -> None:
 def init_project(args: argparse.Namespace) -> None:
     from ...database.orm import create_metadata_database
 
-    logger = get_logger('cli.main.init')
+    global logger
+    logger = get_local_logger('init')
+    logger.info(f'''Run command: {' '.join([quote(sys.executable)] + sys.argv)}''')
 
     if has_sudo_access():
         try:

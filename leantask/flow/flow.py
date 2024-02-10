@@ -7,9 +7,8 @@ from time import sleep
 from typing import Dict, List, Set, Union
 
 from ..database.sqlite.execute import update_flow_run_status_to_db
-from ..context import GlobalContext
 from ..enum import FlowRunStatus, TaskRunStatus
-from ..logging import get_logger
+from ..logging import get_flow_run_logger
 from ..utils.script import calculate_md5
 from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
 from .context import FlowContext
@@ -221,25 +220,27 @@ class Flow:
     def add_run(self, flow_run: FlowRun) -> None:
         self._runs.append(flow_run)
 
-    def add_run_from_cache(self, cache: Dict[str, Union[str, Dict[str, str]]]) -> None:
+    def add_run_from_cache(self, flow_cache: Dict[str, Union[str, Dict[str, str]]]) -> None:
+        self.id = flow_cache['id']
         flow_run = FlowRun(
             self,
-            status=getattr(FlowRunStatus, cache['status']),
-            max_delay=cache['max_delay'],
-            run_id=cache['id'],
-            schedule_id=cache.get('schedule_id'),
-            schedule_datetime=cache.get('schedule_datetime')
+            status=getattr(FlowRunStatus, flow_cache['status']),
+            max_delay=flow_cache['max_delay'],
+            run_id=flow_cache['run_id'],
+            schedule_id=flow_cache.get('schedule_id'),
+            schedule_datetime=flow_cache.get('schedule_datetime')
         )
 
         tasks = {task.name: task for task in flow_run.tasks_ordered}
-        for task_name, task_run in cache['tasks'].items():
+        for task_name, task_cache in flow_cache['tasks'].items():
+            tasks[task_name].id = task_cache['id']
             flow_run.create_task_run(
                 tasks[task_name],
-                attempt=task_run['attempt'],
-                retry_max=task_run.get('retry_max'),
-                retry_delay=task_run.get('retry_delay'),
-                status=getattr(TaskRunStatus, task_run['status']),
-                run_id=task_run['id']
+                attempt=task_cache['attempt'],
+                retry_max=task_cache.get('retry_max'),
+                retry_delay=task_cache.get('retry_delay'),
+                status=getattr(TaskRunStatus, task_cache['status']),
+                run_id=task_cache['run_id']
             )
 
         self._runs.append(flow_run)
@@ -247,23 +248,24 @@ class Flow:
     def run(self) -> FlowRun:
         '''Run flow.'''
         global logger
-        if logger is None:
-            logger = get_logger(f'flow ({GlobalContext.relative_path(self.path)})')
 
         if len(self.runs) == 0 \
                 or self.runs[-1].status in (
                     FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
                     FlowRunStatus.DONE, FlowRunStatus.FAILED
                 ):
-            logger.debug('Prepare for new run.')
             flow_run = FlowRun(self)
+            logger = get_flow_run_logger(self.id, flow_run.id)
+            logger.info(f"Prepare new run flow '{self.name}'.")
+
             for task in flow_run.tasks_ordered:
                 flow_run.create_task_run(task)
             flow_run.status = FlowRunStatus.RUNNING
 
         else:
-            logger.debug('Continue from last run.')
             flow_run = self.runs[-1]
+            logger = get_flow_run_logger(self.id, flow_run.id)
+            logger.info(f"Continue from last run '{self.name}'.")
 
             if flow_run.status in (
                     FlowRunStatus.SCHEDULED,
@@ -333,6 +335,7 @@ class Flow:
             logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
             flow_run.status = FlowRunStatus.DONE
 
+        logger.info(f"Flow run status: '{flow_run.status.name}'.")
         return flow_run
 
     def next_schedule_datetime(self) -> Union[None, datetime]:

@@ -7,6 +7,7 @@ from typing import Dict
 from .context import GlobalContext
 from .enum import FlowIndexStatus
 from .utils.script import calculate_md5
+from .utils.string import quote
 
 
 FLOW_MODULES = [
@@ -75,13 +76,24 @@ def find_flow_checksums() -> Dict[Path, str]:
     }
 
 
-def index_flow(flow_path: Path):
-    command = ' '.join((sys.executable, str(flow_path), 'index'))
+def index_flow(
+        flow_path: Path,
+        log_file_path: Path = None,
+        scheduler_session_id: str = None
+    ):
+    command = ' '.join(
+        [quote(sys.executable), quote(flow_path), 'index']
+        + ['--log-file', quote(log_file_path)] if log_file_path is not None else []
+        + ['--scheduler-session-id', scheduler_session_id] if scheduler_session_id is not None else []
+    )
     flow_index_result = subprocess.run(command, shell=True)
     return FlowIndexStatus(flow_index_result.returncode)
 
 
-def update_flow_records(flow_records = None) -> Dict[Path, str]:
+def update_flow_records(
+        flow_records = None,
+        log_file_path: Path = None
+    ) -> Dict[Path, str]:
     from .database.execute import get_flow_records
     from .database.orm import open_db_session
 
@@ -102,14 +114,14 @@ def update_flow_records(flow_records = None) -> Dict[Path, str]:
                 continue
 
             if flow_record.checksum != flow_checksums[flow_path]:
-                index_status = index_flow(flow_path)
+                index_status = index_flow(flow_path, log_file_path, GlobalContext.SCHEDULER_SESSION_ID)
                 if index_status == FlowIndexStatus.UPDATED:
                     total_changes += 1
                 continue
 
         new_flow_paths = set(flow_checksums.keys()) - set(Path(flow_record.path) for flow_record in flow_records)
         for flow_path in new_flow_paths:
-            index_status = index_flow(flow_path)
+            index_status = index_flow(flow_path, log_file_path, GlobalContext.SCHEDULER_SESSION_ID)
             if index_status == FlowIndexStatus.UPDATED:
                 total_changes += 1
 

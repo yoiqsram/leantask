@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from .context import GlobalContext
 
@@ -11,30 +12,64 @@ class FlushFileHandler(logging.FileHandler):
         super().emit(record)
         self.flush()
 
-
-def get_logger(name: str = None):
-    logging.basicConfig(
-        level=logging.INFO,
-        format=LOG_LONG_FORMAT if GlobalContext.LOG_DEBUG else LOG_SHORT_FORMAT
-    )
-
-    logger = logging.getLogger(name if name is not None else 'leantask')
-
+def get_logger(
+        name: str = None,
+        log_file_path: Path = None
+    ) -> logging.Logger:
+    logging_level = logging.INFO
+    logging_format = LOG_SHORT_FORMAT
+    
     if GlobalContext.LOG_DEBUG:
-        logger.setLevel(logging.DEBUG)
+        logging_level = logging.DEBUG
+        logging_format = LOG_LONG_FORMAT
     elif GlobalContext.LOG_QUIET:
-        logger.setLevel(logging.ERROR)
+        logging_level = logging.ERROR
 
-    log_filename = GlobalContext.get_log_file_path()
-    if log_filename is not None:
-        handler = FlushFileHandler(str(log_filename))
-        handler.setLevel(logging.DEBUG if GlobalContext.LOG_DEBUG else logging.INFO)
-        handler.setFormatter(logging.Formatter(LOG_LONG_FORMAT))
-        logger.addHandler(handler)
+    logger = logging.Logger(name if name is not None else 'leantask', logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter(logging_format))
+    logger.addHandler(stream_handler)
 
+    if log_file_path is not None:
+        file_handler = FlushFileHandler(str(log_file_path))
+        file_handler.setFormatter(logging.Formatter(LOG_LONG_FORMAT))
+        logger.addHandler(file_handler)
+
+    logger.setLevel(logging_level)
     return logger
 
 
-def create_log_file(filename: str = None):
-    GlobalContext.set_log_filename(filename)
-    return GlobalContext.get_log_file_path()
+def get_local_logger(name: str = None) -> logging.Logger:
+    log_file_path = GlobalContext.get_local_log_file_path()
+    return get_logger(name, log_file_path)
+
+
+def get_scheduler_session_logger(scheduler_session_id: str) -> logging.Logger:
+    log_file_path = GlobalContext.get_scheduler_session_log_file_path(
+        scheduler_session_id
+    )
+    return get_logger('scheduler', log_file_path)
+
+
+def get_flow_run_logger(
+        flow_id: str,
+        flow_run_id: str
+    ) -> logging.Logger:
+    log_file_path = GlobalContext.get_flow_run_log_file_path(
+        flow_id,
+        flow_run_id
+    )
+    return get_logger('flow', log_file_path)
+
+
+def get_task_run_logger(
+        flow_id: str,
+        task_id: str,
+        task_run_id: str
+    ) -> logging.Logger:
+    log_file_path = GlobalContext.get_task_run_log_file_path(
+        flow_id,
+        task_id,
+        task_run_id
+    )
+    return get_logger('task', log_file_path)

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Set, Union
 
 from ..database.sqlite.execute import update_task_run_status_to_db
 from ..enum import TaskRunStatus
-from ..logging import get_logger
+from ..logging import get_task_run_logger
 from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
 from .context import FlowContext, TaskContext
 from .output import UndefinedTaskOutput, TaskOutputFile
@@ -28,8 +29,8 @@ class TaskRun:
         self.task = task
         self.flow_run = flow_run
         self.attempt = attempt
-        self.retry_max = retry_max if retry_max is not None else task.retry_max
-        self.retry_delay = retry_delay if retry_delay is not None else task.retry_delay
+        self.retry_max = retry_max if retry_max is not None else self.task.retry_max
+        self.retry_delay = retry_delay if retry_delay is not None else self.task.retry_delay
         self.created_datetime: datetime = datetime.now()
         self.modified_datetime: datetime = self.created_datetime
 
@@ -75,16 +76,20 @@ class TaskRun:
 
     def execute(self) -> None:
         '''Execute task run and record the status.'''
+        logger = get_task_run_logger(
+            self.flow_run.flow.id,
+            self.task.id,
+            self.id,
+        )
+
         try:
             self._start_datetime = datetime.now()
             self.status = TaskRunStatus.RUNNING
-            self.task.run()
+            self.task.run(logger=logger)
             self.status = TaskRunStatus.DONE
 
         except Exception as exc:
             self.status = TaskRunStatus.FAILED
-
-            logger = get_logger(f'task ({self.flow_run.flow.name} - {self.task.name})')
             logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
 
     def __repr__(self) -> str:
@@ -105,12 +110,12 @@ class Task:
             retry_delay: int = 0,
             attrs: dict = None,
             flow = None,
-            __id: str = None
+            task_id: str = None
         ) -> None:
         self._upstreams: Set[Task] = set()
         self._downstreams: Set[Task] = set()
 
-        self.id = __id if __id is not None else generate_uuid()
+        self.id = task_id if task_id is not None else generate_uuid()
         self.name = name
         self.retry_max = retry_max
         self.retry_delay = retry_delay
@@ -126,7 +131,7 @@ class Task:
         self.flow = flow
 
     def __repr__(self) -> str:
-        return f"<Task name='{self.name}'>"
+        return obj_repr(self, 'name', 'retry_max', 'retry_delay')
 
     @property
     def name(self) -> str:
@@ -165,7 +170,7 @@ class Task:
     def add_run(self, task_run: TaskRun) -> None:
         self._runs.append(task_run)
 
-    def run(self) -> None:
+    def run(self, logger: logging.Logger) -> None:
         '''Replace this method to be implemented by your new subclass.'''
         raise NotImplemented("You need to define Task 'run' method.")
 
@@ -265,7 +270,7 @@ def task(
                     "Task 'inputs' is a reserved keyword. "
                     "Please use different keyword name."
                 )
-            
+
             if output_file and task_output_path is None:
                 raise AttributeError("Task 'task_output_path' should be filled.")
 
@@ -279,6 +284,7 @@ def task(
                         attrs=attrs,
                         flow=task_flow
                     )
+
                     self.task_args = task_args
                     self.task_kwargs = task_kwargs
 
@@ -288,13 +294,15 @@ def task(
                     if 'inputs' in func.__code__.co_varnames:
                         self.task_kwargs['inputs'] = self.inputs()
 
-                def run(self):
+                def run(self, logger: logging.Logger):
+                    if 'logger' in func.__code__.co_varnames:
+                        self.task_kwargs['logger'] = logger
+
                     output = func(*self.task_args, **self.task_kwargs)
 
                     if output_file:
                         with self.output().open('w') as f:
                             f.write(output)
-
                     else:
                         self.output(output)
 

@@ -1,9 +1,11 @@
 import argparse
+import sys
 from typing import Callable
 
 from ...context import GlobalContext
 from ...enum import FlowIndexStatus
-from ...logging import get_logger
+from ...logging import get_local_logger, get_logger
+from ...utils.string import quote
 
 logger = None
 
@@ -24,6 +26,14 @@ def add_index_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
+        '--log-file',
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        '--scheduler-session-id',
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
         '--debug',
         action='store_true',
         help=argparse.SUPPRESS
@@ -36,7 +46,14 @@ def index_flow(args: argparse.Namespace, flow) -> None:
     from ...database.orm import open_db_session
 
     global logger
-    logger = get_logger('flow.index')
+    if args.log_file is not None:
+        logger = get_logger('flow.index', args.log_file)
+    else:
+        logger = get_local_logger('flow.index')
+
+    logger.info(f'''Run command: {' '.join([quote(sys.executable)] + sys.argv)}''')
+
+    GlobalContext.SCHEDULER_SESSION_ID = args.scheduler_session_id
 
     try:
         with open_db_session(GlobalContext.database_path()) as session:
@@ -92,7 +109,13 @@ def index_metadata_to_db(flow, session, force: bool = False) -> None:
 
     logger.debug(f"Prepare Task models for all tasks.")
     task_record_map = {
-        task.name: TaskModel(name=task.name, flow=flow_record)
+        task.name: TaskModel(
+            id=task.id,
+            name=task.name,
+            retry_max=task.retry_max,
+            retry_delay=task.retry_delay,
+            flow=flow_record
+        )
         for task in flow.tasks
     }
     task_records = list(task_record_map.values())

@@ -1,30 +1,36 @@
 import json
+import logging
 from leantask import task, Flow
 from pathlib import Path
 
 
 @task
-def print_task(message: str):
-    print(message)
+def print_task(message: str, logger: logging.Logger):
+    logger.info(message)
 
 
 @task(attrs={'attempt_count': 0})
-def fail_task(attrs, message: str, success_on_attempt: int = 3):
+def fail_task(
+        attrs,
+        logger: logging.Logger,
+        message: str,
+        success_on_attempt: int = 3
+    ):
     if attrs['attempt_count'] < success_on_attempt:
         attrs['attempt_count'] += 1
         raise Exception('Fail task.')
 
-    print(message)
+    logger.info(message)
 
 @task
-def json_output(data: dict):
-    print('Pass data to the next task.')
+def json_output(data: dict, logger: logging.Logger):
+    logger.info('Pass data to the next task.')
     return data
 
 
 @task(output_file=True)
-def write_file(inputs):
-    print('Write file from inputs:', inputs)
+def write_file(inputs, logger: logging.Logger):
+    logger.info(f'Write file from inputs: {inputs}')
     return json.dumps(inputs)
 
 

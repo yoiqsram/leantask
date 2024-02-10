@@ -1,20 +1,21 @@
+import logging
 from leantask import task, Flow
 
 
 @task
-def foo():
+def foo(logger: logging.Logger):
     '''This task will have an output of 'dict' object.'''
     output_data = {
         'message': 'This message is the output from foo task.'
     }
-    print('Output:', output_data)
+    logger.info(f'Output: {output_data}')
     return output_data
 
 
 @task
-def bar(inputs):
+def bar(inputs, logger: logging.Logger):
     '''This task will print all inputs from the exact previous task(s).'''
-    print('Inputs:', inputs)
+    logger.info(f'Inputs: {inputs}')
 
 
 with Flow(

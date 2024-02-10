@@ -1,9 +1,10 @@
+import logging
 from leantask import task, Flow
 
 
 @task
-def hello_world(name: str):
-    print(f'Hello, {name}! Welcome to the world!')
+def hello_world(name: str, logger: logging.Logger):
+    logger.info(f'Hello, {name}! Welcome to the world!')
 
 
 with Flow(

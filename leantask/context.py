@@ -2,7 +2,18 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from .enum import LogTableName
+
 METADATA_DIRNAME = '.leantask'
+
+
+def _prepare_log_file(file_path: Path):
+    if not file_path.parent.is_dir():
+        file_path.parent.mkdir(parents=True)
+
+    if not file_path.exists():
+        with open(file_path, 'w'):
+            pass
 
 
 class GlobalContext:
@@ -13,7 +24,6 @@ class GlobalContext:
 
     DATABASE_NAME: str = 'leantask.db'
     LOG_DATABASE_NAME: str = 'leantask_log.db'
-    LOG_NAME: str = None
 
     LOG_DEBUG: int = False
     LOG_QUIET: int = False
@@ -78,23 +88,54 @@ class GlobalContext:
         return log_dir_path
 
     @classmethod
-    def set_log_filename(cls, value: str = None) -> Path:
-        if value is None:
-            current_time = datetime.now().isoformat(sep=' ', timespec='seconds')
-            value = current_time + '.log'
-
-        cls.LOG_NAME = value
+    def get_local_log_file_path(cls) -> Path:
+        current_time = datetime.now().isoformat()
+        log_file_path = cls.log_dir() / 'local' / (current_time + '.log')
+        _prepare_log_file(log_file_path)
+        return log_file_path
 
     @classmethod
-    def get_log_file_path(cls) -> Path:
-        if cls.LOG_NAME is None:
-            return
+    def get_scheduler_session_log_file_path(
+            cls,
+            scheduler_session_id: str,
+        ) -> Path:
+        log_file_path = (
+            cls.log_dir()
+            / LogTableName.SCHEDULER_SESSION.value
+            / (scheduler_session_id + '.log')
+        )
+        _prepare_log_file(log_file_path)
+        return log_file_path
 
-        log_file_path = cls.log_dir() / cls.LOG_NAME
-        if not log_file_path.is_dir():
-            with open(log_file_path, 'w'):
-                pass
+    @classmethod
+    def get_flow_run_log_file_path(
+            cls,
+            flow_id: str,
+            flow_run_id: str
+        ) -> Path:
+        log_file_path = (
+            cls.log_dir()
+            / LogTableName.FLOW_RUN.value
+            / flow_id
+            / (flow_run_id + '.log')
+        )
+        _prepare_log_file(log_file_path)
+        return log_file_path
 
+    @classmethod
+    def get_task_run_log_file_path(
+            cls,
+            flow_id: str,
+            task_name: str,
+            task_run_id: str
+        ) -> Path:
+        log_file_path = (
+            cls.log_dir()
+            / LogTableName.TASK_RUN.value
+            / flow_id / task_name
+            / (task_run_id + '.log')
+        )
+        _prepare_log_file(log_file_path)
         return log_file_path
 
     @classmethod

@@ -5,8 +5,8 @@ from typing import Callable
 
 from ...context import GlobalContext
 from ...enum import FlowScheduleStatus
-from ...logging import get_logger
-from ...utils.string import generate_uuid
+from ...logging import get_local_logger, get_logger
+from ...utils.string import generate_uuid, quote
 
 logger = None
 
@@ -27,6 +27,14 @@ def add_schedule_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
+        '--log-file',
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        '--scheduler-session-id',
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
         '--debug',
         action='store_true',
         help=argparse.SUPPRESS
@@ -40,7 +48,14 @@ def schedule_flow(args: argparse.Namespace, flow) -> None:
     from ...database.orm import open_db_session, NoResultFound
 
     global logger
-    logger = get_logger('flow.schedule')
+    if args.log_file is not None:
+        logger = get_logger('flow.schedule', args.log_file)
+    else:
+        logger = get_local_logger('flow.schedule')
+
+    logger.info(f'''Run command: {' '.join([quote(sys.executable)] + sys.argv)}''')
+
+    GlobalContext.SCHEDULER_SESSION_ID = args.scheduler_session_id
 
     if not flow.active:
         logger.error('Failed to set the new schedule. Flow is inactive.')
@@ -147,11 +162,19 @@ def update_schedule_to_db(
     logger.debug('Prepare flow and task run.')
     task_run_records = []
     for task_record in get_task_records_by_flow_id(flow_record.id, session=session):
-        task_run_records.append(TaskRunModel(task_id=task_record.id, attempt=1, status=TaskRunStatus.PENDING.name))
+        task_run_record = TaskRunModel(
+            task_id=task_record.id,
+            attempt=1,
+            retry_max=task_record.retry_max,
+            retry_delay=task_record.retry_delay,
+            status=TaskRunStatus.PENDING.name
+        )
+        task_run_records.append(task_run_record)
 
     flow_run_record = FlowRunModel(
         flow_id=flow_record.id,
         schedule_datetime=schedule_datetime,
+        max_delay=flow_record.max_delay,
         status=FlowRunStatus.SCHEDULED_BY_USER.name if is_manual else FlowRunStatus.SCHEDULED.name,
         flow_schedule_id=flow_schedule_record.id,
         task_runs=task_run_records

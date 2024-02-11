@@ -1,9 +1,9 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='leantask',
     version='0.1',
-    packages=['leantask'],
+    packages=find_packages(),
     install_requires=[
         'croniter>=2.0.1',
         'greenlet>=3.0.3',

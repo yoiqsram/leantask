@@ -65,14 +65,17 @@ def index_flow(args: argparse.Namespace, flow) -> None:
         raise SystemExit(FlowIndexStatus.FAILED)
 
 
-def index_metadata_to_db(flow, session, force: bool = False) -> None:
-    from ...database.execute import get_flow_record, copy_records_to_log
+def index_metadata_to_db(
+        flow,
+        session, force: bool = False
+    ) -> None:
+    from ...database.execute import get_flow_record_by_name, copy_records_to_log
     from ...database.models import FlowModel, TaskModel, TaskDownstreamModel
     from ...database.orm import NoResultFound
 
     try:
         logger.debug(f"Get flow record from database.")
-        flow_record = get_flow_record(flow.name, session=session)
+        flow_record = get_flow_record_by_name(flow.name, session=session)
 
         tasks_query = (
             session.query(TaskModel)

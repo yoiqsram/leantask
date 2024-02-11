@@ -148,9 +148,13 @@ class Flow:
         self.id = flow_id if flow_id is not None else generate_uuid()
         self.name = name
         self.description = description
-        self.schedule = Schedule(cron_schedules, start_datetime, end_datetime)
         self.max_delay = max_delay
         self.active = active
+
+        if cron_schedules is not None:
+            self.schedule = Schedule(cron_schedules, start_datetime, end_datetime)
+        else:
+            self.schedule = None
 
         self._path = Path(inspect.stack()[-1].filename).resolve()
         self._checksum = calculate_md5(self._path)
@@ -338,11 +342,11 @@ class Flow:
         logger.info(f"Flow run status: '{flow_run.status.name}'.")
         return flow_run
 
-    def next_schedule_datetime(self) -> Union[None, datetime]:
-        # from datetime import timedelta
-        # now = datetime.now() + timedelta(minutes=15)
-        # return datetime(year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute)
-        return
+    def next_schedule_datetime(self, anchor_datetime: datetime = None) -> datetime:
+        if self.schedule is None:
+            return None
+
+        return self.schedule.next_datetime(anchor_datetime)
 
     def __repr__(self) -> str:
         return obj_repr(self, 'name', 'path', 'active')

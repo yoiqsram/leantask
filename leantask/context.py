@@ -41,8 +41,16 @@ class GlobalContext:
         cls.PROJECT_DIR = value
 
     @classmethod
-    def set_scheduler_session_id(cls, value: str) -> None:
-        cls.SCHEDULER_SESSION_ID = value
+    def set_scheduler_session(
+            cls,
+            session_id: str,
+            created_datetime: datetime = None
+        ) -> None:
+        cls.SCHEDULER_SESSION_ID = session_id
+
+        if created_datetime is None:
+            created_datetime = datetime.now()
+        cls.SCHEDULER_SESSION_TIMESTAMP = created_datetime
 
     @classmethod
     def relative_path(cls, value: Path) -> Path:
@@ -95,14 +103,11 @@ class GlobalContext:
         return log_file_path
 
     @classmethod
-    def get_scheduler_session_log_file_path(
-            cls,
-            scheduler_session_id: str,
-        ) -> Path:
+    def get_scheduler_session_log_file_path(cls) -> Path:
         log_file_path = (
             cls.log_dir()
             / LogTableName.SCHEDULER_SESSION.value
-            / (scheduler_session_id + '.log')
+            / (datetime.now().isoformat() + '.log')
         )
         _prepare_log_file(log_file_path)
         return log_file_path

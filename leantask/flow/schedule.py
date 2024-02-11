@@ -1,4 +1,3 @@
-import croniter
 from datetime import datetime
 from typing import List, Union
 
@@ -13,21 +12,31 @@ class Schedule:
         if not isinstance(cron_schedules, list):
             cron_schedules = [cron_schedules]
         self.cron_schedules = cron_schedules
+
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
 
-    def next_datetime(self, start_datetime: datetime = None) -> Union[datetime, None]:
+    def next_datetime(
+            self,
+            anchor_datetime: datetime = None
+        ) -> Union[datetime, None]:
+        import croniter
+
+        if anchor_datetime is None:
+            anchor_datetime = datetime.now()
+
         min_next_datetime = None
-        if start_datetime is None:
-            start_datetime = datetime.now()
-
         for cron_schedule in self.cron_schedules:
-            cron_iter = croniter.croniter(cron_schedule, start_datetime)
-            cron_next_datetime = cron_iter.next()
+            cron_iter = croniter.croniter(cron_schedule, anchor_datetime)
+            cron_next_datetime = cron_iter.get_next(datetime)
 
-            if self.end_datetime is not None:
-                if cron_next_datetime > self.end_datetime:
-                    continue
+            if self.start_datetime is not None \
+                    and cron_next_datetime < self.start_datetime:
+                continue
+
+            if self.end_datetime is not None \
+                    and cron_next_datetime > self.end_datetime:
+                continue
 
             if min_next_datetime is None:
                 min_next_datetime = cron_next_datetime

@@ -3,8 +3,8 @@ from pathlib import Path
 
 from .context import GlobalContext
 
-LOG_SHORT_FORMAT = '%(message)s'
-LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)s - %(name)s - %(message)s'
+LOG_SHORT_FORMAT = '[%(asctime)s] %(message)s'
+LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)s (%(name)s) %(message)s'
 
 
 class FlushFileHandler(logging.FileHandler):
@@ -42,13 +42,6 @@ def get_logger(
 def get_local_logger(name: str = None) -> logging.Logger:
     log_file_path = GlobalContext.get_local_log_file_path()
     return get_logger(name, log_file_path)
-
-
-def get_scheduler_session_logger(scheduler_session_id: str) -> logging.Logger:
-    log_file_path = GlobalContext.get_scheduler_session_log_file_path(
-        scheduler_session_id
-    )
-    return get_logger('scheduler', log_file_path)
 
 
 def get_flow_run_logger(

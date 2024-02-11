@@ -44,7 +44,7 @@ def add_schedule_parser(subparsers) -> Callable:
 
 
 def schedule_flow(args: argparse.Namespace, flow) -> None:
-    from ...database.execute import get_flow_record
+    from ...database.execute import get_flow_record_by_name
     from ...database.orm import open_db_session, NoResultFound
 
     global logger
@@ -59,13 +59,13 @@ def schedule_flow(args: argparse.Namespace, flow) -> None:
 
     if not flow.active:
         logger.error('Failed to set the new schedule. Flow is inactive.')
-        raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
+        raise SystemExit(FlowScheduleStatus.NO_SCHEDULE.value)
 
     try:
         with open_db_session(GlobalContext.database_path()) as session:
             try:
                 logger.debug('Get flow record from database.')
-                flow_record = get_flow_record(flow.name, session=session)
+                flow_record = get_flow_record_by_name(flow.name, session=session)
 
             except NoResultFound:
                 logger.error(
@@ -121,7 +121,11 @@ def update_schedule_to_db(
             .filter(FlowScheduleModel.flow_id == flow_record.id)
             .one()
         )
-        max_delay = timedelta(seconds=flow_record.max_delay if flow_record.max_delay is not None else 0)
+        logger.debug(repr(flow_schedule_record))
+
+        max_delay = timedelta(seconds=flow_record.max_delay) if flow_record.max_delay is not None else None
+        logger.debug(f'{max_delay=}')
+        logger.debug(f'{flow_schedule_record.schedule_datetime=}')
 
         if flow_run_record.status in (
                 FlowRunStatus.CANCELED.name, FlowRunStatus.CANCELED_BY_USER,
@@ -129,22 +133,33 @@ def update_schedule_to_db(
                 ):
             logger.info('There was old schedule that has been executed and has not been removed.')
 
-        elif (flow_schedule_record.schedule_datetime + max_delay) <= datetime.now():
+        elif max_delay is None:
             logger.error(
-                'Failed to set the new schedule. The flow has been scheduled' +
-                (' by scheduler'
+                'Failed to set the new schedule. The flow has been scheduled'
+                + (' by scheduler'
                     if flow_run_record.status == FlowRunStatus.SCHEDULED.name
-                    else ' manually') +
-                ' at' +
-                repr(flow_schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes')) +
-                (f' and has not been passing its max delay of {flow_record.max_delay} s.'
-                    if flow_record.max_delay is not None \
-                    else ' and new schedule only can be set when it finish.')
+                    else ' manually')
+                + ' at'
+                + repr(flow_schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes'))
+                + ' and new schedule can only be set when it finish.'
+            )
+            raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
+
+        elif max_delay is not None and (flow_schedule_record.schedule_datetime + max_delay) <= datetime.now():
+            logger.error(
+                'Failed to set the new schedule. The flow has been scheduled'
+                + (' by scheduler'
+                    if flow_run_record.status == FlowRunStatus.SCHEDULED.name
+                    else ' manually')
+                + ' at'
+                + repr(flow_schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes'))
+                + f' and has not been passing its max delay of {flow_record.max_delay}s.'
             )
             raise SystemExit(FlowScheduleStatus.FAILED_SCHEDULE_EXISTS.value)
 
         logger.info('Existing schedule is removed.')
         session.delete(flow_schedule_record)
+        session.delete(flow_run_record)
         session.commit()
 
     except NoResultFound:

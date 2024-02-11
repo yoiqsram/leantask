@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Generator, List, Union
+from typing import Dict, Generator, List, Set, Union
 
 from ..enum import FlowRunStatus
 from ..context import GlobalContext
@@ -18,7 +18,7 @@ from .orm import db_session, Session
 
 
 @db_session(GlobalContext.database_path())
-def get_flow_record(
+def get_flow_record_by_name(
         name: str,
         session: Session = None
     ) -> FlowModel:
@@ -31,8 +31,21 @@ def get_flow_record(
 
 
 @db_session(GlobalContext.database_path())
-def get_flow_records(session: Session = None) -> List[FlowModel]:
-    return session.query(FlowModel).all()
+def get_flow_record_by_path(
+        path: Path,
+        session: Session = None
+    ) -> FlowModel:
+    flow_record = (
+        session.query(FlowModel)
+        .filter(FlowModel.path == str(path))
+        .one()
+    )
+    return flow_record
+
+
+@db_session(GlobalContext.database_path())
+def get_flow_records(session: Session = None) -> Set[FlowModel]:
+    return set(session.query(FlowModel).all())
 
 
 @db_session(GlobalContext.database_path())
@@ -65,7 +78,10 @@ def create_scheduler_session(
     session.add(scheduler_session_record)
     session.commit()
 
-    GlobalContext.set_scheduler_session_id(scheduler_session_record.id)
+    GlobalContext.set_scheduler_session(
+        scheduler_session_record.id,
+        scheduler_session_record.created_datetime
+    )
     return session_id
 
 

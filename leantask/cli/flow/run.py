@@ -120,7 +120,7 @@ def run_flow(args: argparse.Namespace, flow) -> None:
 
 
 def prepare_flow_for_manual_run(flow):
-    from ...database.execute import get_flow_record, get_task_records_by_flow_id
+    from ...database.execute import get_flow_record_by_name, get_task_records_by_flow_id
     from ...database.orm import NoResultFound
 
     logger.debug('Prepare flow run for manual run.')
@@ -128,7 +128,7 @@ def prepare_flow_for_manual_run(flow):
     flow_record = None
     try:
         logger.debug('Get flow record from database.')
-        flow_record = get_flow_record(flow.name)
+        flow_record = get_flow_record_by_name(flow.name)
     except NoResultFound:
         logger.error(
             'Flow has not been indexed. Use this command to index the flow:\n'

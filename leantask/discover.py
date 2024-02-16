@@ -92,8 +92,8 @@ def index_flow(
 
 
 def update_flow_records(
-        flow_records: Set,
-        log_file_path: Path
+        flow_records: Set = None,
+        log_file_path: Path = None
     ) -> Dict[Any, FlowIndexStatus]:
     from .database.execute import get_flow_record_by_path, get_flow_records
     from .database.orm import open_db_session

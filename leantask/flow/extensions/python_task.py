@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..context import TaskContext
-from .task import Task
+from ..task import Task
 
 
 def python_task(

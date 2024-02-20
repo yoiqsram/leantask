@@ -1,4 +1,5 @@
 from __future__ import annotations
+from enum import Enum
 
 from ..database import BaseModel
 from ..database.common import ForeignKeyField
@@ -29,7 +30,8 @@ class ModelMixin:
                 if isinstance(field, ForeignKeyField):
                     key += '_id'
 
-                kwargs[key] = getattr(self, key)
+                value = getattr(self, key)
+                kwargs[key] = value if not isinstance(value, Enum) else value.name
 
             self._model = self.__model__(**kwargs)
 
@@ -65,11 +67,14 @@ class ModelMixin:
             if isinstance(field, ForeignKeyField):
                 key += '_id'
 
-            setattr(self._model, key, getattr(self, key))
+            value = getattr(self, key)
+            value = value if not isinstance(value, Enum) else value.name
+            setattr(self._model, key, value)
             log_kwargs[log_key] = getattr(self._model, key)
 
         with self._model._meta.database.atomic():
             self._model.save(force_insert=not self._model_exists)
+            self._model_exists = True
 
             log_model = self._model._meta.log_model(**log_kwargs)
             log_model.save(force_insert=True)

@@ -33,12 +33,13 @@ class FlowModel(BaseModel):
 
 class FlowScheduleModel(BaseModel):
     id = column_uuid_primary_key()
-    flow_id = ForeignKeyField(
+    flow = ForeignKeyField(
         FlowModel,
         backref='flow_schedules',
         on_delete='CASCADE'
     )
     schedule_datetime = column_datetime()
+    max_delay = column_integer(null=True)
     is_manual = column_boolean(default=True)
 
     created_datetime = column_current_datetime()
@@ -49,15 +50,15 @@ class FlowScheduleModel(BaseModel):
 
 class FlowRunModel(BaseModel):
     id = column_uuid_primary_key()
-    flow_id = ForeignKeyField(
+    flow = ForeignKeyField(
         FlowModel,
         backref='flow_runs',
         on_delete='CASCADE'
     )
+    schedule_datetime = column_datetime(null=True)
     max_delay = column_integer(null=True)
     is_manual = column_boolean(default=False)
     status = column_small_string()
-    schedule_datetime = column_datetime(null=True)
 
     flow_schedule = ForeignKeyField(
         FlowScheduleModel,

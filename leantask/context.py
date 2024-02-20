@@ -117,8 +117,8 @@ class GlobalContext:
         log_file_path = (
             cls.log_dir()
             / LogTableName.FLOW_RUN.value
-            / flow_id
-            / (flow_run_id + '.log')
+            / str(flow_id)
+            / (str(flow_run_id) + '.log')
         )
         _prepare_log_file(log_file_path)
         return log_file_path
@@ -133,8 +133,9 @@ class GlobalContext:
         log_file_path = (
             cls.log_dir()
             / LogTableName.TASK_RUN.value
-            / flow_id / task_name
-            / (task_run_id + '.log')
+            / str(flow_id)
+            / str(task_name)
+            / (str(task_run_id) + '.log')
         )
         _prepare_log_file(log_file_path)
         return log_file_path

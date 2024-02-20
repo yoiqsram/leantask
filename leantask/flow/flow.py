@@ -191,10 +191,10 @@ class Flow(ModelMixin):
         return flow_run
 
     def next_schedule_datetime(self, anchor_datetime: datetime = None) -> datetime:
-        if self.schedule is None:
+        if self._schedule is None:
             return None
 
-        return self.schedule.next_datetime(anchor_datetime)
+        return self._schedule.next_datetime(anchor_datetime)
 
     def save(self) -> None:
         with database.atomic():
@@ -244,22 +244,21 @@ class FlowRun(ModelMixin):
             schedule_id: str = None,
             schedule_datetime: datetime = None
         ) -> None:
-        self.flow_schedule_id = schedule_id
-        self.schedule_datetime = schedule_datetime
-
         self.max_delay = max_delay if max_delay is not None else flow.max_delay
         self.is_manual = is_manual
+        self.flow_schedule_id = schedule_id
+        self.schedule_datetime = schedule_datetime
 
         self.flow = flow
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
 
-        self.logger = get_flow_run_logger(self.flow.id, self.id)
-
         self._task_runs_sorted: OrderedDict[Task, TaskRun] = OrderedDict()
         self._status = status
 
         super(FlowRun, self).__init__(run_id)
+
+        self.logger = get_flow_run_logger(self.flow.id, self.id)
 
     @property
     def flow_id(self) -> str:
@@ -327,26 +326,26 @@ class FlowRun(ModelMixin):
 
         has_failed = False
         for task_run in self._task_runs_sorted.values():
-            self.logger.debug(f"Prepare task run for '{task_run.name}'.")
+            self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
 
             if task_run.status != TaskRunStatus.PENDING:
                 self.logger.debug(
-                    f"Task '{task_run.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
+                    f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
                     f" thus it will not be run."
                 )
                 continue
 
             while True:
-                self.logger.debug(f"Execute task '{task_run.name}' on {task_run.attempt + 1} attempt(s).")
+                self.logger.debug(f"Execute task '{task_run.task.name}' on {task_run.attempt + 1} attempt(s).")
                 task_run.execute()
 
                 if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
-                    self.logger.debug(f"Task '{task_run.name}' has been flagged as '{task_run.status.name}'.")
+                    self.logger.debug(f"Task '{task_run.task.name}' has been flagged as '{task_run.status.name}'.")
                     break
 
                 if task_run.attempt > task_run.retry_max:
                     self.logger.debug(
-                        f"Task '{task_run.name}' has run for {task_run.attempt} time(s)"
+                        f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
                         f" and reaching the maximum attempt of {task_run.retry_max}."
                     )
                     break
@@ -356,11 +355,11 @@ class FlowRun(ModelMixin):
                 task_run = task_run.next_attempt()
 
             if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-                self.logger.debug(f"Task '{task_run.name}' has failed on all of its attempts.")
+                self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
                 has_failed = True
                 for downstream_task_run in task_run.iter_downstream():
                     self.logger.debug(
-                        f"Set task '{downstream_task_run.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
+                        f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
                     )
                     downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
 

@@ -5,14 +5,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set, Union
 
-from ...database import TaskModel, TaskDownstreamModel, TaskRunModel
-from ...database.log_models import TaskDownstreamLogModel
-from ...enum import TaskRunStatus
-from ...logging import get_task_run_logger
-from ...utils.string import obj_repr, validate_use_safe_chars
-from ..base import ModelMixin
-from ..context import FlowContext
-from ..output import FileTaskOutput, ObjectTaskOutput, TaskOutput, UndefinedTaskOutput
+from ..database import TaskModel, TaskDownstreamModel, TaskRunModel
+from ..database.log_models import TaskDownstreamLogModel
+from ..enum import TaskRunStatus
+from ..logging import get_task_run_logger
+from ..utils.string import obj_repr, validate_use_safe_chars
+from .base import ModelMixin
+from .context import FlowContext
+from .output import FileTaskOutput, ObjectTaskOutput, TaskOutput, UndefinedTaskOutput
 
 
 class Task(ModelMixin):
@@ -45,7 +45,11 @@ class Task(ModelMixin):
 
         self.flow = flow
 
-        super(Task, self).__init__(task_id, name=self.name)
+        super(Task, self).__init__(
+            task_id,
+            flow_id=self.flow.id,
+            name=self.name
+        )
 
     @property
     def flow_id(self) -> str:
@@ -88,6 +92,7 @@ class Task(ModelMixin):
     def _setup_existing_model(
             self,
             __id: str = None,
+            flow_id: str = None,
             name: str = None
         ) -> None:
         if __id is not None:
@@ -104,12 +109,12 @@ class Task(ModelMixin):
             except IndexError:
                 pass
 
-        elif name is not None:
+        elif flow_id is not None and name is not None:
             try:
                 self._model = (
                     self.__model__.select()
                     .where(
-                        (self.__model__.flow == self.flow.id)
+                        (self.__model__.flow == self.flow_id)
                         & (self.__model__.name == name)
                     )
                     .limit(1)
@@ -228,7 +233,17 @@ class TaskRun(ModelMixin):
 
         self._status = status
 
-        super(TaskRun, self).__init__(run_id)
+        super(TaskRun, self).__init__(
+            run_id,
+            flow_run_id=self.flow_run.id,
+            task_id=self.task.id
+        )
+
+        self.logger = get_task_run_logger(
+            self.flow_run.flow.id,
+            self.task.id,
+            self.id
+        )
 
     @property
     def flow_run_id(self) -> str:
@@ -263,11 +278,49 @@ class TaskRun(ModelMixin):
                 f"'{self._status.name}' to '{value.name}'."
             )
 
+        self.logger.debug(f"Set task run status from '{self._status.name}' to '{value.name}'.")
         self._status = value
         self._model.status = self._status
         self.modified_datetime = datetime.now()
         self._model.modified_datetime = self.modified_datetime
         self.save()
+
+    def _setup_existing_model(
+            self,
+            __id: str = None,
+            flow_run_id: str = None,
+            task_id: str = None
+        ) -> None:
+        if __id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(self.__model__.id == __id)
+                    .limit(1)
+                    [0]
+                )
+
+                self._model_exists = True
+
+            except IndexError:
+                pass
+
+        elif flow_run_id is not None and task_id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(
+                        (self.__model__.flow_run == self.flow_run_id)
+                        & (self.__model__.task == task_id)
+                    )
+                    .order_by(self.__model__.attempt.desc())
+                    .limit(1)
+                    [0]
+                )
+                self._model_exists = True
+
+            except IndexError:
+                pass
 
     def total_seconds(self) -> Union[float, None]:
         '''Return total seconds from task run start to task run end.'''

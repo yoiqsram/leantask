@@ -1,73 +1,27 @@
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Generator, List, Set, Union
+from typing import Dict, Generator, List, Union
 
 from ..enum import FlowRunStatus
 from ..context import GlobalContext
-from .models import (
+from .base import database
+from ..database import (
     FlowModel, FlowScheduleModel, FlowRunModel,
+    MetadataModel,
     TaskModel, TaskDownstreamModel, TaskRunModel,
-    log as log_models
-)
-from .models.log import (
     FlowLogModel, FlowRunLogModel,
-    TaskLogModel,
-    SchedulerSessionModel
+    TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel,
+    SchedulerSessionModel,
+    database, log_database
 )
-from .orm import db_session, Session
 
 
-@db_session(GlobalContext.database_path())
-def get_flow_record_by_name(
-        name: str,
-        session: Session = None
-    ) -> FlowModel:
-    flow_record = (
-        session.query(FlowModel)
-        .filter(FlowModel.name == name)
-        .one()
-    )
-    return flow_record
-
-
-@db_session(GlobalContext.database_path())
-def get_flow_record_by_path(
-        path: Path,
-        session: Session = None
-    ) -> FlowModel:
-    flow_record = (
-        session.query(FlowModel)
-        .filter(FlowModel.path == str(path))
-        .one()
-    )
-    return flow_record
-
-
-@db_session(GlobalContext.database_path())
-def get_flow_records(session: Session = None) -> Set[FlowModel]:
-    return set(session.query(FlowModel).all())
-
-
-@db_session(GlobalContext.database_path())
-def get_task_records_by_flow_id(
-        flow_id: str,
-        session: Session = None
-    ) -> List[TaskModel]:
-    task_records = (
-        session.query(TaskModel)
-        .filter(TaskModel.flow_id == flow_id)
-        .all()
-    )
-    return task_records
-
-
-@db_session(GlobalContext.log_database_path())
 def create_scheduler_session(
         session_id: str,
         heartbeat: int,
         worker: int,
-        log_file_path: Path,
-        session: Session = None
+        log_file_path: Path
     ) -> None:
     scheduler_session_record = SchedulerSessionModel(
         id=session_id,
@@ -75,8 +29,7 @@ def create_scheduler_session(
         worker=worker,
         log_path=str(log_file_path)
     )
-    session.add(scheduler_session_record)
-    session.commit()
+    scheduler_session_record.save()
 
     GlobalContext.set_scheduler_session(
         scheduler_session_record.id,
@@ -85,15 +38,44 @@ def create_scheduler_session(
     return session_id
 
 
-@db_session(GlobalContext.database_path())
-def get_scheduled_run_tasks(
-        _datetime: datetime = None,
-        session: Session = None
-    ) -> Dict[Path, Dict[str, Union[str, List[str]]]]:
-    if _datetime is None:
-        _datetime = datetime.now()
+def create_metadata_database(
+        project_name: str,
+        project_description: str = None
+    ) -> None:
+    try:
+        database.create_tables([
+            FlowModel, FlowScheduleModel, FlowRunModel,
+            TaskModel, TaskDownstreamModel, TaskRunModel,
+            MetadataModel
+        ])
+        log_database.create_tables([
+            FlowLogModel, FlowRunLogModel,
+            TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel,
+            SchedulerSessionModel
+        ])
 
-    select_columns = (
+        project_metadata = {
+            'name': project_name,
+            'description': project_description,
+            'is_active': True
+        }
+
+        for name, value in project_metadata.items():
+            MetadataModel.create(name=name, value=str(value))
+
+    except Exception as exc:
+        GlobalContext.database_path().unlink(missing_ok=True)
+        GlobalContext.log_database_path().unlink(missing_ok=True)
+        raise exc
+
+
+def get_scheduled_run_tasks(
+        __datetime: datetime = None
+    ) -> Dict[Path, Dict[str, Union[str, List[str]]]]:
+    if __datetime is None:
+        __datetime = datetime.now()
+
+    select_fields = (
         FlowModel.id,
         FlowModel.path,
         FlowModel.name,
@@ -112,22 +94,21 @@ def get_scheduled_run_tasks(
         TaskRunModel.retry_delay
     )
     schedule_records = (
-        session.query(*select_columns)
-        .select_from(FlowModel)
-        .join(FlowScheduleModel, FlowScheduleModel.flow_id == FlowModel.id, isouter=True)
-        .join(FlowRunModel, FlowRunModel.flow_id == FlowModel.id)
-        .join(TaskRunModel, TaskRunModel.flow_run_id == FlowRunModel.id)
-        .join(TaskModel, TaskModel.id == TaskRunModel.task_id)
-        .filter(
+        TaskRunModel.select(*select_fields)
+        .join(FlowRunModel)
+        .join(FlowScheduleModel)
+        .join(TaskModel)
+        .join(FlowModel)
+        .where(
             FlowModel.active == True,
-            FlowRunModel.schedule_datetime <= _datetime,
+            FlowRunModel.schedule_datetime <= __datetime,
             FlowRunModel.status.in_((
                 FlowRunStatus.SCHEDULED.name,
                 FlowRunStatus.SCHEDULED_BY_USER.name,
                 FlowRunStatus.RUNNING.name
             ))
         )
-        .all()
+        .execute()
     )
 
     flow_task_schedules = dict()
@@ -160,18 +141,16 @@ def get_scheduled_run_tasks(
     return flow_task_schedules
 
 
-@db_session(GlobalContext.log_database_path())
 def copy_records_to_log(
         records: List[Union[
             FlowModel, FlowRunModel, TaskModel,
             TaskDownstreamModel, TaskRunModel
-        ]],
-        session: Session
+        ]]
     ) -> None:
     log_records = []
     for record in records:
         kwargs = dict()
-        columns = [column.name for column in record.__table__.columns]
+        columns = [column.name for column in record._meta.fields]
         for column in columns:
             if column == 'id':
                 kwargs['ref_id'] = getattr(record, column)
@@ -192,16 +171,11 @@ def copy_records_to_log(
         log_record = eval(log_model_name)(**kwargs)
         log_records.append(log_record)
 
-    session.add_all(log_records)
-    session.commit()
 
-
-@db_session(GlobalContext.log_database_path())
 def iter_log_run_records(
         flow_name: str,
         start_datetime: datetime,
-        end_datetime: datetime,
-        session: Session = None
+        end_datetime: datetime
     ) -> Generator:
     select_columns = [
         FlowLogModel.name,

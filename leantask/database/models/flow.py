@@ -62,7 +62,7 @@ class FlowRunModel(BaseModel):
 
     flow_schedule = ForeignKeyField(
         FlowScheduleModel,
-        backref='flow_run',
+        backref='flow_runs',
         on_delete='CASCADE',
         unique=True,
         null=True

@@ -374,6 +374,10 @@ class FlowRun(ModelMixin):
 
         self.logger.info(f"Flow run status: '{self.status.name}'.")
 
+        self.logger.debug('Delete schedule if exists.')
+        if self._model.flow_schedule is not None:
+            self._model.flow_schedule.delete_instance()
+
     def total_seconds(self) -> Union[float, None]:
         if self._status in (
                 FlowRunStatus.FAILED,
@@ -397,18 +401,3 @@ class FlowRun(ModelMixin):
 
     def __repr__(self) -> str:
         return obj_repr(self, 'flow_id', 'flow_name', 'status')
-
-    @classmethod
-    def from_database(cls, __id: str):
-        model = cls.get_model(__id)
-
-        return cls(
-            name=model.name,
-            description=model.description,
-            cron_schedules=model.cron_schedules.split(',') if model.cron_schedules is not None else None,
-            start_datetime=model.start_datetime,
-            end_datetime=model.end_datetime,
-            max_delay=model.max_delay,
-            active=model.active,
-            flow_id=model.id
-        )

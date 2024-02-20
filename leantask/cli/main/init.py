@@ -4,10 +4,18 @@ import sys
 from datetime import datetime
 
 from ...context import GlobalContext
+from ...database import (
+    FlowModel, FlowScheduleModel, FlowRunModel,
+    MetadataModel,
+    TaskModel, TaskDownstreamModel, TaskRunModel,
+    FlowLogModel, FlowRunLogModel,
+    TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel,
+    SchedulerSessionModel,
+    database, log_database
+)
 from ...logging import get_local_logger
 from ...utils.script import has_sudo_access, sync_server_time
 from ...utils.string import quote
-from ...database.execute import create_metadata_database
 
 
 def add_init_parser(subparsers) -> None:
@@ -92,3 +100,34 @@ def init_project(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     logger.info(f"Project created successfully on '{GlobalContext.PROJECT_DIR}'.")
+
+
+def create_metadata_database(
+        project_name: str,
+        project_description: str = None
+    ) -> None:
+    try:
+        database.create_tables([
+            FlowModel, FlowScheduleModel, FlowRunModel,
+            TaskModel, TaskDownstreamModel, TaskRunModel,
+            MetadataModel
+        ])
+        log_database.create_tables([
+            FlowLogModel, FlowRunLogModel,
+            TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel,
+            SchedulerSessionModel
+        ])
+
+        project_metadata = {
+            'name': project_name,
+            'description': project_description,
+            'is_active': True
+        }
+
+        for name, value in project_metadata.items():
+            MetadataModel.create(name=name, value=str(value))
+
+    except Exception as exc:
+        GlobalContext.database_path().unlink(missing_ok=True)
+        GlobalContext.log_database_path().unlink(missing_ok=True)
+        raise exc

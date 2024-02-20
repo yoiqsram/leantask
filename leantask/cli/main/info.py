@@ -1,6 +1,8 @@
 import argparse
 from typing import Callable
 
+from ...utils.string import quote
+
 
 def add_info_parser(subparsers) -> Callable:
     parser = subparsers.add_parser(
@@ -53,17 +55,18 @@ def show_flow_info() -> None:
             )
             continue
 
-        schedule_model = (
+        schedule_models = list(
             FlowScheduleModel.select()
             .where(FlowScheduleModel.flow_id == flow_model.id)
+            .order_by(FlowScheduleModel.schedule_datetime)
         )
 
-        if len(schedule_model) == 0:
+        if len(schedule_models) == 0:
             print('-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
             continue
 
         print(
             f"- {flow_model.name} (path={flow_model.path}",
-            f"next_schedule={flow_model.schedule_datetime.isoformat(sep=' ', timespec='minutes')}",
-            f"max_delay={flow_model.max_delay})",
+            f"next_schedule={quote(schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
+            f"max_delay={schedule_models[0].max_delay})",
         )

@@ -61,11 +61,11 @@ class ModelMixin:
             if key in self.__class__.__refs__:
                 log_key = f'ref_{key}'
 
-            if not hasattr(self, key):
-                continue
-
             if isinstance(field, ForeignKeyField):
                 key += '_id'
+
+            if not hasattr(self, key):
+                continue
 
             value = getattr(self, key)
             value = value if not isinstance(value, Enum) else value.name

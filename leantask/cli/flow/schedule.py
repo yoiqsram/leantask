@@ -6,6 +6,7 @@ from typing import Callable
 from ...context import GlobalContext
 from ...database import FlowScheduleModel
 from ...enum import FlowRunStatus, FlowScheduleStatus
+from ...flow import Flow, FlowRun, TaskRun
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
 
@@ -139,7 +140,7 @@ def update_schedule(
 
         try:
             flow_run_model = (
-                flow_schedule_model.flow_run
+                flow_schedule_model.flow_runs
                 .limit(1)
                 [0]
             )
@@ -150,7 +151,7 @@ def update_schedule(
                     ):
                 logger.info('There was old schedule that has been executed and has not been removed.')
                 logger.info('Clear current schedule.')
-                flow_schedule_model.delete()
+                flow_schedule_model.delete_instance()
 
             elif max_delay is None:
                 logger.warning(
@@ -190,7 +191,7 @@ def update_schedule(
                 continue
 
             logger.info('Remove existing schedule.')
-            flow_schedule_model.delete()
+            flow_schedule_model.delete_instance()
 
     if not force and len(flow_schedule_models) > 0:
         logger.error(
@@ -207,6 +208,29 @@ def update_schedule(
     )
     flow_schedule_model.save(force_insert=True)
 
+    create_new_flow_run(flow, flow_schedule_model)
+
     logger.info(
         f"Successfully added a schedule at {schedule_datetime.isoformat(sep=' ', timespec='minutes')}."
     )
+
+
+def create_new_flow_run(
+        flow: Flow,
+        flow_schedule_model: FlowScheduleModel,
+    ) -> None:
+    logger.debug('Create new scheduled flow run.')
+    is_manual = flow_schedule_model.is_manual
+
+    flow_run = FlowRun(
+        flow,
+        is_manual=is_manual,
+        status=FlowRunStatus.SCHEDULED if not is_manual else FlowRunStatus.SCHEDULED_BY_USER,
+        schedule_id=flow_schedule_model.id,
+        schedule_datetime=flow_schedule_model.schedule_datetime
+    )
+    for task in flow.tasks:
+        task_run = TaskRun(flow_run, task)
+        flow_run.add_task_run(task_run)
+
+    flow_run.save()

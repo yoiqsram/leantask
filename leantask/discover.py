@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any, Dict, Set
 
 from .context import GlobalContext
+from .database import FlowModel
 from .enum import FlowIndexStatus
 from .logging import get_logger
+from .utils.path import is_file_match_patterns, parse_gitignore_patterns
 from .utils.script import calculate_md5
 from .utils.string import quote
 
@@ -70,11 +72,25 @@ def has_declare_flow(file_path: Path) -> bool:
 
 
 def find_flow_checksums() -> Dict[Path, str]:
-    return {
-        GlobalContext.relative_path(file_path): calculate_md5(file_path)
-        for file_path in GlobalContext.PROJECT_DIR.rglob('*.py')
-        if has_declare_flow(file_path)
-    }
+    gitignore_path = GlobalContext.PROJECT_DIR / '.gitignore'
+    if gitignore_path.exists():
+        gitignore_patterns = parse_gitignore_patterns(gitignore_path)
+    else:
+        gitignore_patterns = []
+
+    flow_checksums = dict()
+    for file_path in GlobalContext.PROJECT_DIR.rglob('*.py'):
+        file_path = GlobalContext.relative_path(file_path)
+
+        if is_file_match_patterns(file_path, gitignore_patterns):
+            continue
+
+        if not has_declare_flow(file_path):
+            continue
+
+        flow_checksums[file_path] = calculate_md5(file_path)
+
+    return flow_checksums
 
 
 def index_flow(
@@ -91,59 +107,66 @@ def index_flow(
     return FlowIndexStatus(flow_index_result.returncode)
 
 
-def update_flow_records(
-        flow_records: Set = None,
+def index_all_flows(
+        flow_models: Set = None,
         log_file_path: Path = None
-    ) -> Dict[Any, FlowIndexStatus]:
-    from .database.execute import get_flow_record_by_path, get_flow_records
-    from .database.orm import open_db_session
-
+    ) -> Dict[FlowModel, FlowIndexStatus]:
     logger = get_logger('discover', log_file_path)
 
-    total_changes = 0
     flow_checksums = find_flow_checksums()
-    updated_flow_records = dict()
-    with open_db_session(GlobalContext.database_path()) as session:
-        if flow_records is None:
-            logger.debug('Get flow records from database.')
-            flow_records = get_flow_records(session=session)
-        else:
-            flow_records = flow_records.copy()
 
-        for flow_record in flow_records:
-            flow_path = Path(flow_record.path)
-            if flow_path not in flow_checksums:
-                logger.info(f"Flow '{flow_record.name}' from '{flow_record.path}' has been removed.")
-                session.delete(flow_record)
-                session.commit()
-                total_changes += 1
-                continue
+    if flow_models is None:
+        logger.debug('Get flow records from database.')
+        flow_models = list(FlowModel.select())
+    else:
+        flow_models = flow_models.copy()
 
-            if flow_record.checksum != flow_checksums[flow_path]:
-                logger.info(f"Flow '{flow_record.name}' from '{flow_record.path}' has been changed.")
-                index_status = index_flow(flow_path, log_file_path, GlobalContext.SCHEDULER_SESSION_ID)
-                if index_status == FlowIndexStatus.UPDATED:
-                    total_changes += 1
+    total_changes = 0
+    updated_flow_models = {
+        flow_model: FlowIndexStatus.UNCHANGED
+        for flow_model in flow_models
+    }
+    for flow_model in flow_models:
+        flow_path = Path(flow_model.path)
+        if flow_path not in flow_checksums:
+            logger.info(f"Flow '{flow_model.name}' from '{flow_model.path}' has been removed.")
+            total_changes += 1
+            continue
 
-                updated_flow_record = get_flow_record_by_path(flow_path, session=session)
-                updated_flow_records[updated_flow_record] = index_status
-                continue
-
-            updated_flow_records[flow_record] = FlowIndexStatus.UNCHANGED
-
-        new_flow_paths = set(flow_checksums.keys()) - set(Path(flow_record.path) for flow_record in flow_records)
-        for flow_path in new_flow_paths:
-            logger.info(f"Found a new flow from '{flow_path}'.")
-            index_status = index_flow(
-                flow_path=flow_path,
-                log_file_path=log_file_path,
-                scheduler_session_id=GlobalContext.SCHEDULER_SESSION_ID
-            )
-            updated_flow_record = get_flow_record_by_path(flow_path, session=session)
-            updated_flow_records[updated_flow_record] = index_status
+        if flow_model.checksum != flow_checksums[flow_path]:
+            logger.info(f"Flow '{flow_model.name}' from '{flow_model.path}' has been changed.")
+            index_status = index_flow(flow_path, log_file_path, GlobalContext.SCHEDULER_SESSION_ID)
             if index_status == FlowIndexStatus.UPDATED:
                 total_changes += 1
 
-        logger.debug(f'Total changes made on flows: {total_changes}.')
+            updated_flow_model = (
+                FlowModel.select()
+                .where(FlowModel.path == flow_model.flow_path)
+                .limit(1)
+                [0]
+            )
+            updated_flow_models[updated_flow_model] = index_status
+            continue
 
-    return updated_flow_records
+    new_flow_paths = set(flow_checksums.keys()) - set(Path(flow_model.path) for flow_model in flow_models)
+    for flow_path in new_flow_paths:
+        logger.info(f"Found a new flow from '{flow_path}'.")
+
+        index_status = index_flow(
+            flow_path=flow_path,
+            log_file_path=log_file_path,
+            scheduler_session_id=GlobalContext.SCHEDULER_SESSION_ID
+        )
+        updated_flow_model = (
+            FlowModel.select()
+            .where(FlowModel.path == str(flow_path))
+            .limit(1)
+            [0]
+        )
+        updated_flow_models[updated_flow_model] = index_status
+
+        if index_status == FlowIndexStatus.UPDATED:
+            total_changes += 1
+
+    logger.debug(f'Total changes made on flows: {total_changes}.')
+    return updated_flow_models

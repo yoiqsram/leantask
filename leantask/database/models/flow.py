@@ -1,96 +1,76 @@
-from ._base import (
-    Model, Boolean, Column, DateTime, Integer, ForeignKey,
-    SMALL_STRING, MEDIUM_STRING, BIG_STRING, UUID_STRING,
-    column_uuid_primary_key, column_current_datetime, column_modified_datetime,
-    column_md5, column_scheduler_session_id,
-    relationship
-)
 from ...enum import TableName
-from ...utils.string import obj_repr
+from ..base import BaseModel
+from ..common import (
+    ForeignKeyField, SQL,
+    column_boolean, column_integer,
+    column_small_string, column_medium_string, column_big_string, column_text,
+    column_md5_string, column_uuid_primary_key,
+    column_datetime, column_current_datetime, column_modified_datetime
+)
+from ..log_models import FlowLogModel, FlowRunLogModel
 
 
-class FlowModel(Model):
-    __tablename__ = TableName.FLOW.value
-
+class FlowModel(BaseModel):
     id = column_uuid_primary_key()
-    name = Column(MEDIUM_STRING, primary_key=True)
-    path = Column(BIG_STRING, nullable=False)
-    checksum = column_md5()
-    max_delay = Column(Integer)
-    active = Column(Boolean, default=False, nullable=False)
+    path = column_big_string(null=True)
+    name = column_medium_string()
+    description = column_text(null=True)
+    cron_schedules = column_medium_string(null=True)
+    start_datetime = column_datetime(null=True)
+    end_datetime = column_datetime(null=True)
+    max_delay = column_integer(null=True)
+    checksum = column_md5_string(null=True)
+    active = column_boolean(default=False)
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()
 
-    tasks = relationship(
-        'TaskModel',
-        back_populates='flow',
-        cascade='all, delete-orphan'
-    )
-
-    flow_schedule = relationship(
-        'FlowScheduleModel',
-        back_populates='flow',
-        cascade='all, delete-orphan',
-        uselist=False
-    )
-
-    flow_runs = relationship(
-        'FlowRunModel',
-        back_populates='flow',
-        cascade='all, delete-orphan'
-    )
-
-    def __repr__(self) -> str:
-        return obj_repr(self, 'id', 'name', 'path', 'active')
+    class Meta:
+        table_name = TableName.FLOW.value
+        constraints = [SQL('UNIQUE (path, name)')]
+        log_model = FlowLogModel
 
 
-class FlowScheduleModel(Model):
-    __tablename__ = TableName.FLOW_SCHEDULE.value
-
+class FlowScheduleModel(BaseModel):
     id = column_uuid_primary_key()
-    flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
-    schedule_datetime = Column(DateTime)
-    is_manual = Column(Boolean, default=False)
+    flow = ForeignKeyField(
+        FlowModel,
+        backref='flow_schedules',
+        on_delete='CASCADE'
+    )
+    schedule_datetime = column_datetime()
+    max_delay = column_integer(null=True)
+    is_manual = column_boolean(default=True)
 
-    scheduler_session_id = column_scheduler_session_id()
     created_datetime = column_current_datetime()
 
-    flow = relationship(
-        'FlowModel',
-        back_populates='flow_schedule',
-        uselist=False
-    )
-
-    def __repr__(self) -> str:
-        return obj_repr(self, 'id', 'flow_id', 'schedule_datetime', 'is_manual')
+    class Meta:
+        table_name = TableName.FLOW_SCHEDULE.value
 
 
-class FlowRunModel(Model):
-    __tablename__ = TableName.FLOW_RUN.value
-
+class FlowRunModel(BaseModel):
     id = column_uuid_primary_key()
-    flow_id = Column(UUID_STRING, ForeignKey('flows.id'), nullable=False)
-    schedule_datetime = Column(DateTime)
-    max_delay = Column(Integer)
-    status = Column(SMALL_STRING, nullable=False)
+    flow = ForeignKeyField(
+        FlowModel,
+        backref='flow_runs',
+        on_delete='CASCADE'
+    )
+    schedule_datetime = column_datetime(null=True)
+    max_delay = column_integer(null=True)
+    is_manual = column_boolean(default=False)
+    status = column_small_string()
 
-    flow_schedule_id = Column(UUID_STRING)
+    flow_schedule = ForeignKeyField(
+        FlowScheduleModel,
+        backref='flow_runs',
+        on_delete='CASCADE',
+        unique=True,
+        null=True
+    )
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()
 
-    flow = relationship(
-        'FlowModel',
-        back_populates='flow_runs',
-        uselist=False
-    )
-
-    task_runs = relationship(
-        'TaskRunModel',
-        back_populates='flow_run',
-        cascade='all, delete-orphan'
-    )
-
-    def __repr__(self) -> str:
-        return obj_repr(self, 'id', 'flow_id', 'schedule_datetime', 'max_delay', 'status')
+    class Meta:
+        table_name = TableName.FLOW_RUN.value
+        log_model = FlowRunLogModel

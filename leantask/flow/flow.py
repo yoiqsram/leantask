@@ -1,53 +1,276 @@
 from __future__ import annotations
 
 import inspect
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-from typing import Dict, List, Set, Union
+from typing import List, Set, Union
 
-from ..database.sqlite.execute import update_flow_run_status_to_db
-from ..enum import FlowRunStatus, TaskRunStatus
+from ..context import GlobalContext
+from ..database import FlowModel, FlowRunModel, database
+from ..enum import FlowIndexStatus, FlowRunStatus, TaskRunStatus
 from ..logging import get_flow_run_logger
 from ..utils.script import calculate_md5
-from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
+from ..utils.string import obj_repr, validate_use_safe_chars
+from ..utils.tree import sort_tree_nodes
+from .base import ModelMixin
 from .context import FlowContext
 from .schedule import Schedule
 from .task import Task, TaskRun
 
-logger = None
+
+class Flow(ModelMixin):
+    __model__ = FlowModel
+    __refs__ = ('id', )
+
+    def __init__(
+            self,
+            name: str,
+            description: str = None,
+            cron_schedules: Union[str, List[str]] = None,
+            start_datetime: datetime = None,
+            end_datetime: datetime = None,
+            max_delay: int = None,
+            active: bool = True,
+            flow_id: str = None
+        ) -> None:
+        if FlowContext.__defined__ is not None:
+            raise RuntimeError('You can only define one flow.')
+        FlowContext.__defined__ = self
+
+        self.name = name
+        self.description = description
+        self.max_delay = max_delay
+        self.active = active
+
+        if cron_schedules is not None:
+            self._schedule = Schedule(cron_schedules, start_datetime, end_datetime)
+        else:
+            self._schedule = None
+
+        try:
+            self._path = GlobalContext.relative_path(Path(inspect.stack()[-1].filename).resolve())
+            self._checksum = calculate_md5(self._path)
+        except FileNotFoundError:
+            self._path = None
+            self._checksum = None
+
+        self._tasks: Set[Task] = set()
+        self._runs: List[FlowRun] = []
+
+        super(Flow, self).__init__(flow_id, path=self._path, name=self.name)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        validate_use_safe_chars(value)
+        self._name = value
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    @property
+    def cron_schedules(self) -> Union[str, None]:
+        if self._schedule is None:
+            return None
+        return ','.join(self._schedule.cron_schedules)
+
+    @property
+    def start_datetime(self) -> Union[datetime, None]:
+        if self._schedule is None:
+            return None
+        return self._schedule.start_datetime
+
+    @property
+    def end_datetime(self) -> Union[datetime, None]:
+        if self._schedule is None:
+            return None
+        return self._schedule.end_datetime
+
+    @property
+    def checksum(self) -> str:
+        return self._checksum
+
+    @property
+    def tasks(self) -> Set[Task]:
+        return self._tasks
+
+    @property
+    def tasks_sorted(self) -> List[Task]:
+        return sort_tree_nodes(self._tasks, 'downstreams')
+
+    @property
+    def runs(self) -> List[FlowRun]:
+        return self._runs
+
+    def _setup_existing_model(
+            self,
+            __id: str = None,
+            path: str = None,
+            name: str = None
+        ) -> None:
+        if __id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(self.__model__.id == __id)
+                    .limit(1)
+                    [0]
+                )
+
+                self._model_exists = True
+
+            except IndexError:
+                pass
+
+        elif path is not None and name is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(
+                        (self.__model__.path == path)
+                        & (self.__model__.name == name)
+                    )
+                    .limit(1)
+                    [0]
+                )
+                self._model_exists = True
+
+            except IndexError:
+                pass
+
+    def add_task(self, task: Task) -> None:
+        if not isinstance(task, Task):
+            raise TypeError()
+
+        registered_task_names = set(task.name for task in self._tasks)
+        new_tasks = [task] + list(task.iter_downstream())
+        for task in new_tasks:
+            if task.name in registered_task_names:
+                raise ValueError(f"'{task.name}' is already registered in the flow.")
+
+            self._tasks.add(task)
+            task._flow = self
+
+    def add_run(self, flow_run: FlowRun) -> None:
+        if not isinstance(flow_run, FlowRun):
+            raise TypeError()
+
+        self._runs.append(flow_run)
+
+    def run(self) -> FlowRun:
+        if len(self.runs) == 0 \
+                or self.runs[-1].status in (
+                    FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
+                    FlowRunStatus.DONE, FlowRunStatus.FAILED
+                ):
+            flow_run = FlowRun(self, status=FlowRunStatus.RUNNING)
+            flow_run.create_all_task_runs()
+
+        else:
+            flow_run = self.runs[-1]
+            if flow_run.status in (
+                    FlowRunStatus.SCHEDULED,
+                    FlowRunStatus.SCHEDULED_BY_USER,
+                ):
+                flow_run.status = FlowRunStatus.RUNNING
+
+        if flow_run.status != FlowRunStatus.RUNNING:
+            flow_run.logger.warning(
+                f"Flow run is flagged as '{flow_run.status.name}' not '{FlowRunStatus.RUNNING.name}',"
+                f" thus it will not be run."
+            )
+            return flow_run
+
+        flow_run.execute()
+        return flow_run
+
+    def next_schedule_datetime(self, anchor_datetime: datetime = None) -> datetime:
+        if self._schedule is None:
+            return None
+
+        return self._schedule.next_datetime(anchor_datetime)
+
+    def save(self) -> None:
+        with database.atomic():
+            super(Flow, self).save()
+
+            for task in self.tasks:
+                task.save()
+
+    def index(self) -> FlowIndexStatus:
+        if self._model_exists and self._model.checksum == self.checksum:
+            return FlowIndexStatus.UNCHANGED
+
+        self.save()
+        return FlowIndexStatus.UPDATED
+
+    def __repr__(self) -> str:
+        return obj_repr(self, 'name', 'path', 'active')
+
+    def __enter__(self) -> Flow:
+        if FlowContext.__active__ is not None:
+            raise RuntimeError(
+                "There's already an active flow at the moment. "
+                f' ({repr(FlowContext.__active__)})'
+            )
+
+        FlowContext.__active__ = self
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        from ..cli.flow import run_cli
+
+        FlowContext.__active__ = None
+        run_cli(self)
 
 
-class FlowRun:
+class FlowRun(ModelMixin):
+    __model__ = FlowRunModel
+    __refs__ = ('id', 'flow', 'flow_schedule')
+
     def __init__(
             self,
             flow: Flow,
-            status: FlowRunStatus = FlowRunStatus.UNKNOWN,
             max_delay: int = None,
+            is_manual: bool = True,
+            status: FlowRunStatus = FlowRunStatus.UNKNOWN,
             run_id: str = None,
             schedule_id: str = None,
             schedule_datetime: datetime = None
         ) -> None:
-        self.id = run_id if run_id is not None else generate_uuid()
-        self.schedule_id = schedule_id
-        self.schedule_datetime = schedule_datetime
         self.max_delay = max_delay if max_delay is not None else flow.max_delay
+        self.is_manual = is_manual
+        self.flow_schedule_id = schedule_id
+        self.schedule_datetime = schedule_datetime
 
         self.flow = flow
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
 
-        self._tasks_ordered = flow.tasks_ordered
-        self._task_runs: Dict[Task, TaskRun] = dict()
+        self._task_runs_sorted: OrderedDict[Task, TaskRun] = OrderedDict()
         self._status = status
+
+        super(FlowRun, self).__init__(run_id)
+
+        self.logger = get_flow_run_logger(self.flow.id, self.id)
+
+    @property
+    def flow_id(self) -> str:
+        return self.flow.id
 
     @property
     def flow_name(self) -> str:
         return self.flow.name
 
     @property
-    def tasks_ordered(self) -> List[Task]:
-        return self._tasks_ordered
+    def task_runs_sorted(self) -> OrderedDict[Task, TaskRun]:
+        return self._task_runs_sorted
 
     @property
     def status(self) -> FlowRunStatus:
@@ -70,16 +293,17 @@ class FlowRun:
             )
 
         self._status = value
+        self._model.status = self._status
         self.modified_datetime = datetime.now()
-        update_flow_run_status_to_db(self)
+        self._model.modified_datetime = self.modified_datetime
+        self.save()
 
         if self._status in (
                 FlowRunStatus.SCHEDULED,
                 FlowRunStatus.SCHEDULED_BY_USER,
                 FlowRunStatus.RUNNING
             ):
-            for task in self.tasks_ordered:
-                task_run = self.get_task_run(task)
+            for task_run in self.task_runs_sorted:
                 if task_run.status != TaskRunStatus.PENDING:
                     task_run.status = TaskRunStatus.PENDING
 
@@ -91,6 +315,69 @@ class FlowRun:
                 if task_run.status == TaskRunStatus.PENDING:
                     task_run.status = TaskRunStatus.CANCELED
 
+    def add_task_run(self, task_run: TaskRun) -> None:
+        if not isinstance(task_run, TaskRun):
+            raise TypeError()
+
+        self._task_runs_sorted[task_run.task] = task_run
+
+    def execute(self):
+        self.logger.info(f"Run flow '{self.flow.name}'.")
+
+        has_failed = False
+        for task_run in self._task_runs_sorted.values():
+            self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
+
+            if task_run.status != TaskRunStatus.PENDING:
+                self.logger.debug(
+                    f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
+                    f" thus it will not be run."
+                )
+                continue
+
+            while True:
+                self.logger.debug(f"Execute task '{task_run.task.name}' on {task_run.attempt + 1} attempt(s).")
+                task_run.execute()
+
+                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
+                    self.logger.debug(f"Task '{task_run.task.name}' has been flagged as '{task_run.status.name}'.")
+                    break
+
+                if task_run.attempt > task_run.retry_max:
+                    self.logger.debug(
+                        f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
+                        f" and reaching the maximum attempt of {task_run.retry_max}."
+                    )
+                    break
+
+                self.logger.debug(f"Wait for {task_run.retry_delay} s before retrying.")
+                sleep(task_run.retry_delay)
+                task_run = task_run.next_attempt()
+
+            if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
+                self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
+                has_failed = True
+                for downstream_task_run in task_run.iter_downstream():
+                    self.logger.debug(
+                        f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
+                    )
+                    downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
+
+        if has_failed:
+            self.logger.debug(
+                f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
+            )
+            self.status = FlowRunStatus.FAILED
+        else:
+            self.logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
+            self.status = FlowRunStatus.DONE
+
+        self.logger.info(f"Flow run status: '{self.status.name}'.")
+
+        self.logger.debug('Delete schedule if exists.')
+        if self._model.flow_schedule is not None:
+            self._model.flow_schedule.delete_instance()
+
     def total_seconds(self) -> Union[float, None]:
         if self._status in (
                 FlowRunStatus.FAILED,
@@ -98,272 +385,19 @@ class FlowRun:
             ):
             return (self.modified_datetime - self.created_datetime).total_seconds()
 
-    def create_task_run(
-            self,
-            task: Task,
-            attempt: int = 1,
-            retry_max: int = None,
-            retry_delay: int = None,
-            status: TaskRunStatus = TaskRunStatus.UNKNOWN,
-            run_id: str = None
-        ) -> TaskRun:
-        if task in self._task_runs:
-            attempt = self._task_runs[task].attempt + 1 if attempt is None else attempt
-
-        task_run = TaskRun(
-            self,
-            task=task,
-            attempt=attempt,
-            retry_max=retry_max,
-            retry_delay=retry_delay,
-            status=status,
-            run_id=run_id
-        )
-        self._task_runs[task] = task_run
-        return task_run
+    def create_all_task_runs(self):
+        for task in self.flow.tasks_sorted:
+            task_run = TaskRun(
+                self,
+                task=task,
+                attempt=1,
+                retry_max=task.retry_max,
+                retry_delay=task.retry_delay
+            )
+            self._task_runs_sorted[task] = task_run
 
     def get_task_run(self, task: Task) -> TaskRun:
         return self._task_runs[task]
 
     def __repr__(self) -> str:
-        return obj_repr(self, 'flow_name', 'status')
-
-
-class Flow:
-    '''Wrap task declaration using 'with Flow():' statement to make it runable.'''
-    def __init__(
-            self,
-            name: str,
-            description: str = None,
-            cron_schedules: Union[str, List[str]] = None,
-            start_datetime: datetime = None,
-            end_datetime: datetime = None,
-            max_delay: int = None,
-            active: bool = True,
-            flow_id: str = None
-        ) -> None:
-        if FlowContext.__defined__ is not None:
-            raise RuntimeError('You can only define one flow.')
-
-        self.id = flow_id if flow_id is not None else generate_uuid()
-        self.name = name
-        self.description = description
-        self.max_delay = max_delay
-        self.active = active
-
-        if cron_schedules is not None:
-            self.schedule = Schedule(cron_schedules, start_datetime, end_datetime)
-        else:
-            self.schedule = None
-
-        self._path = Path(inspect.stack()[-1].filename).resolve()
-        self._checksum = calculate_md5(self._path)
-
-        self._tasks: Set[Task] = set()
-        self._runs: List[FlowRun] = []
-
-        FlowContext.__defined__ = self
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, value: str) -> None:
-        validate_use_safe_chars(value)
-        self._name = value
-
-    @property
-    def path(self) -> Path:
-        return self._path
-
-    @property
-    def checksum(self) -> str:
-        return self._checksum
-
-    @property
-    def tasks(self) -> Set[Task]:
-        return self._tasks
-
-    @property
-    def tasks_ordered(self) -> List[Task]:
-        ordered_tasks = []
-        visited = set()
-
-        def dfs(task):
-            nonlocal visited
-            if task in visited:
-                return
-
-            visited.add(task)
-            for downstream_task in task.downstreams:
-                dfs(downstream_task)
-
-            ordered_tasks.append(task)
-
-        for task in self._tasks:
-            dfs(task)
-
-        return ordered_tasks[::-1]
-
-    @property
-    def runs(self) -> List[FlowRun]:
-        return self._runs
-
-    def add_task(self, task: Task) -> None:
-        '''Add task to the flow.'''
-        task_names = set(task.name for task in self._tasks)
-        for task in task.iter_downstream():
-            if task.name in task_names:
-                raise ValueError(f"'{task.name}' is already registered in the flow.")
-
-            task_names.add(task.name)
-            self._tasks.add(task)
-            task._flow = self
-
-    def add_run(self, flow_run: FlowRun) -> None:
-        self._runs.append(flow_run)
-
-    def add_run_from_cache(self, flow_cache: Dict[str, Union[str, Dict[str, str]]]) -> None:
-        self.id = flow_cache['id']
-        flow_run = FlowRun(
-            self,
-            status=getattr(FlowRunStatus, flow_cache['status']),
-            max_delay=flow_cache['max_delay'],
-            run_id=flow_cache['run_id'],
-            schedule_id=flow_cache.get('schedule_id'),
-            schedule_datetime=flow_cache.get('schedule_datetime')
-        )
-
-        tasks = {task.name: task for task in flow_run.tasks_ordered}
-        for task_name, task_cache in flow_cache['tasks'].items():
-            tasks[task_name].id = task_cache['id']
-            flow_run.create_task_run(
-                tasks[task_name],
-                attempt=task_cache['attempt'],
-                retry_max=task_cache.get('retry_max'),
-                retry_delay=task_cache.get('retry_delay'),
-                status=getattr(TaskRunStatus, task_cache['status']),
-                run_id=task_cache['run_id']
-            )
-
-        self._runs.append(flow_run)
-
-    def run(self) -> FlowRun:
-        '''Run flow.'''
-        global logger
-
-        if len(self.runs) == 0 \
-                or self.runs[-1].status in (
-                    FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
-                    FlowRunStatus.DONE, FlowRunStatus.FAILED
-                ):
-            flow_run = FlowRun(self)
-            logger = get_flow_run_logger(self.id, flow_run.id)
-            logger.info(f"Prepare new run flow '{self.name}'.")
-
-            for task in flow_run.tasks_ordered:
-                flow_run.create_task_run(task)
-            flow_run.status = FlowRunStatus.RUNNING
-
-        else:
-            flow_run = self.runs[-1]
-            logger = get_flow_run_logger(self.id, flow_run.id)
-            logger.info(f"Continue from last run '{self.name}'.")
-
-            if flow_run.status in (
-                    FlowRunStatus.SCHEDULED,
-                    FlowRunStatus.SCHEDULED_BY_USER,
-                ):
-                flow_run.status = FlowRunStatus.RUNNING
-
-        if flow_run.status != FlowRunStatus.RUNNING:
-            logger.warning(
-                f"Flow run is flagged as '{flow_run.status.name}' not '{FlowRunStatus.RUNNING.name}',"
-                f" thus it will not be run."
-            )
-            return flow_run
-
-        logger.debug('Prepare task run based on task order.')
-        has_failed = False
-        for task in flow_run.tasks_ordered:
-            logger.debug(f"Prepare task run for '{task.name}'.")
-            task_run = flow_run.get_task_run(task)
-
-            if task_run.status != TaskRunStatus.PENDING:
-                logger.debug(
-                    f"Task '{task.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
-                    f" thus it will not be run."
-                )
-                continue
-
-            while True:
-                logger.debug(f"Execute task '{task.name}'.")
-                task_run.execute()
-
-                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
-                    logger.debug(f"Task '{task.name}' has been flagged as '{task_run.status.name}'.")
-                    break
-
-                if task_run.attempt > task_run.retry_max:
-                    logger.debug(
-                        f"Task '{task.name}' has run for {task_run.attempt} time(s)"
-                        f" and reaching the maximum attempt of {task_run.retry_max}."
-                    )
-                    break
-
-                logger.debug(f"Wait for {task_run.retry_delay} s before retrying.")
-                sleep(task_run.retry_delay)
-                logger.debug(f"Prepare new task run for '{task.name}' ({task_run.attempt + 1}).")
-                task_run = flow_run.create_task_run(task, attempt=task_run.attempt + 1)
-
-            if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-                logger.debug(f"Task '{task.name}' has failed on all of its attempts.")
-                has_failed = True
-                for downstream_task in task.iter_downstream():
-                    if downstream_task == task:
-                        continue
-
-                    logger.debug(
-                        f"Set task '{downstream_task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
-                    )
-                    downstream_task_run = flow_run.get_task_run(downstream_task)
-                    downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
-
-        if has_failed:
-            logger.debug(
-                f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
-            )
-            flow_run.status = FlowRunStatus.FAILED
-        else:
-            logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
-            flow_run.status = FlowRunStatus.DONE
-
-        logger.info(f"Flow run status: '{flow_run.status.name}'.")
-        return flow_run
-
-    def next_schedule_datetime(self, anchor_datetime: datetime = None) -> datetime:
-        if self.schedule is None:
-            return None
-
-        return self.schedule.next_datetime(anchor_datetime)
-
-    def __repr__(self) -> str:
-        return obj_repr(self, 'name', 'path', 'active')
-
-    def __enter__(self) -> Flow:
-        if FlowContext.__active__ is not None:
-            raise RuntimeError(
-                "There's already an active flow at the moment. "
-                f' ({repr(FlowContext.__active__)})'
-            )
-
-        FlowContext.__active__ = self
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        FlowContext.__active__ = None
-
-        from ..cli.flow import run_cli
-
-        run_cli(self)
+        return obj_repr(self, 'flow_id', 'flow_name', 'status')

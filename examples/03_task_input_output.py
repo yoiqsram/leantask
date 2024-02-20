@@ -1,8 +1,8 @@
 import logging
-from leantask import task, Flow
+from leantask import python_task, Flow
 
 
-@task
+@python_task
 def foo(logger: logging.Logger):
     '''This task will have an output of 'dict' object.'''
     output_data = {
@@ -11,7 +11,7 @@ def foo(logger: logging.Logger):
     return output_data
 
 
-@task
+@python_task
 def bar(inputs, logger: logging.Logger):
     '''This task will print all inputs from the exact previous task(s).'''
     logger.info(f'Inputs: {inputs}')

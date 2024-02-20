@@ -3,105 +3,22 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Set, Union
+from typing import Any, Dict, Iterable, List, Set, Union
 
-from ..database.sqlite.execute import update_task_run_status_to_db
+from ..database import TaskModel, TaskDownstreamModel, TaskRunModel
+from ..database.log_models import TaskDownstreamLogModel
 from ..enum import TaskRunStatus
 from ..logging import get_task_run_logger
-from ..utils.string import generate_uuid, obj_repr, validate_use_safe_chars
-from .context import FlowContext, TaskContext
+from ..utils.string import obj_repr, validate_use_safe_chars
+from .base import ModelMixin
+from .context import FlowContext
 from .output import FileTaskOutput, ObjectTaskOutput, TaskOutput, UndefinedTaskOutput
 
 
-class TaskRun:
-    '''Track task run status.'''
-    def __init__(
-            self,
-            flow_run,
-            task: Task,
-            attempt: int = 1,
-            retry_max: int = None,
-            retry_delay: int = None,
-            status: TaskRunStatus = TaskRunStatus.PENDING,
-            run_id: str = None
-        ) -> None:
-        self.id = run_id if run_id is not None else generate_uuid()
-        self.task = task
-        self.flow_run = flow_run
-        self.attempt = attempt
-        self.retry_max = retry_max if retry_max is not None else self.task.retry_max
-        self.retry_delay = retry_delay if retry_delay is not None else self.task.retry_delay
-        self.created_datetime: datetime = datetime.now()
-        self.modified_datetime: datetime = self.created_datetime
+class Task(ModelMixin):
+    __model__ = TaskModel
+    __refs__ = ('id', 'flow')
 
-        self._status = status
-
-    @property
-    def task_name(self) -> str:
-        return self.task.name
-
-    @property
-    def status(self) -> TaskRunStatus:
-        '''Return task run status.'''
-        return self._status
-
-    @status.setter
-    def status(self, value: TaskRunStatus) -> None:
-        if not isinstance(value, TaskRunStatus):
-            raise TypeError(
-                f"Run status of flow '{self.task.name}' should be 'TaskRunStatus' not '{type(value)}'."
-            )
-
-        if self._status == TaskRunStatus.DONE or (
-                value not in (TaskRunStatus.UNKNOWN, TaskRunStatus.DONE)
-                and value.value <= self._status.value
-            ):
-            raise ValueError(
-                f"Run status of flow '{self.task.name}' cannot be set to similar or backward state from "
-                f"'{self._status.name}' to '{value.name}'."
-            )
-
-        self._status = value
-        self.modified_datetime = datetime.now()
-        update_task_run_status_to_db(self)
-
-    def total_seconds(self) -> Union[float, None]:
-        '''Return total seconds from task run start to task run end.'''
-        if self.status in (
-                TaskRunStatus.DONE,
-                TaskRunStatus.FAILED,
-                TaskRunStatus.FAILED_BY_USER,
-            ):
-            return (self.modified_datetime - self.created_datetime).total_seconds()
-
-    def execute(self) -> None:
-        '''Execute task run and record the status.'''
-        logger = get_task_run_logger(
-            self.flow_run.flow.id,
-            self.task.id,
-            self.id,
-        )
-
-        try:
-            self._start_datetime = datetime.now()
-            self.status = TaskRunStatus.RUNNING
-            self.task.run(logger=logger)
-            self.status = TaskRunStatus.DONE
-
-        except Exception as exc:
-            self.status = TaskRunStatus.FAILED
-            logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
-
-    def __repr__(self) -> str:
-        return obj_repr(self, 'task_name', 'attempt', 'status')
-
-
-class Task:
-    '''Basic Task class
-
-    Define run method to be implemented by your new subclass.
-    Use self.inputs() and self.output() to access task inputs and outputs.
-    '''
     def __init__(
             self,
             name: str,
@@ -115,7 +32,6 @@ class Task:
         self._upstreams: Set[Task] = set()
         self._downstreams: Set[Task] = set()
 
-        self.id = task_id if task_id is not None else generate_uuid()
         self.name = name
         self.retry_max = retry_max
         self.retry_delay = retry_delay
@@ -125,13 +41,19 @@ class Task:
             raise TypeError(f"Task 'output_path' must be a Path, not '{type(output_path)}'.")        
         self.output_path = output_path
         self._output = UndefinedTaskOutput()
-
         self._runs: List[TaskRun] = []
 
         self.flow = flow
 
-    def __repr__(self) -> str:
-        return obj_repr(self, 'name', 'retry_max', 'retry_delay')
+        super(Task, self).__init__(
+            task_id,
+            flow_id=self.flow.id,
+            name=self.name
+        )
+
+    @property
+    def flow_id(self) -> str:
+        return self.flow.id
 
     @property
     def name(self) -> str:
@@ -166,6 +88,42 @@ class Task:
     @property
     def runs(self) -> List[TaskRun]:
         return self._runs
+
+    def _setup_existing_model(
+            self,
+            __id: str = None,
+            flow_id: str = None,
+            name: str = None
+        ) -> None:
+        if __id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(self.__model__.id == __id)
+                    .limit(1)
+                    [0]
+                )
+
+                self._model_exists = True
+
+            except IndexError:
+                pass
+
+        elif flow_id is not None and name is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(
+                        (self.__model__.flow == self.flow_id)
+                        & (self.__model__.name == name)
+                    )
+                    .limit(1)
+                    [0]
+                )
+                self._model_exists = True
+
+            except IndexError:
+                pass
 
     def add_run(self, task_run: TaskRun) -> None:
         self._runs.append(task_run)
@@ -206,8 +164,29 @@ class Task:
         obj._downstreams.add(self)
         self._upstreams.add(obj)
 
-    def __repr__(self) -> str:
-        return obj_repr(self, 'name', 'retry_max', 'retry_delay')
+    def iter_downstream(self) -> Iterable[Task]:
+        '''Iterate all downstream tasks.'''
+        for downstream_task in self._downstreams:
+            yield downstream_task
+            yield from downstream_task.iter_downstream()
+
+    def save(self) -> None:
+        super(Task, self).save()
+
+        for downstream_task in self.iter_downstream():
+            model = TaskDownstreamModel(
+                task=self.id,
+                downstream_task=downstream_task.id
+            )
+            model.save()
+
+            log_model = TaskDownstreamLogModel(
+                ref_id=model.id,
+                ref_task=self.id,
+                ref_downstream_task=downstream_task.id,
+                created_datetime=self._model.created_datetime
+            )
+            log_model.save(force_insert=True)
 
     def __rshift__(self, obj: Union[Task, Iterable[Task]]) -> Union[Task, Iterable[Task]]:
         '''Task can be required by another Task or tuple/list of Task.'''
@@ -226,90 +205,160 @@ class Task:
 
         return obj
 
-    def iter_downstream(self) -> Iterable[Task]:
-        '''Iterate all downstream tasks.'''
-        yield self
-        for downstream_task in self._downstreams:
-            yield from downstream_task.iter_downstream()
+    def __repr__(self) -> str:
+        return obj_repr(self, 'id', 'flow_id', 'name', 'retry_max', 'retry_delay')
 
 
-def task(
-        *args,
-        attrs: dict = None,
-        output_file: bool = False,
-    ) -> Callable:
-    '''Use @task decorator on your function to make it run as a Task.'''
-    def task_decorator(func: Callable) -> Callable:
-        def task_register(
-                *task_args,
-                task_name: str = None,
-                task_output_path: Path = None,
-                task_retry_max: int = 0,
-                task_retry_delay: int = 0,
-                task_flow = None,
-                **task_kwargs
-            ) -> Task:
-            '''Register a new task function.'''
-            if task_name is None:
-                task_name = func.__name__
+class TaskRun(ModelMixin):
+    __model__ = TaskRunModel
+    __refs__ = ('id', 'flow_run', 'task')
 
-            if task_name in TaskContext.__names__:
-                raise ValueError(
-                    f"There's already a Task named '{task_name}'."
-                    " Define a specific name or change your function name."
+    def __init__(
+            self,
+            flow_run,
+            task: Task,
+            attempt: int = 1,
+            retry_max: int = None,
+            retry_delay: int = None,
+            status: TaskRunStatus = TaskRunStatus.PENDING,
+            run_id: str = None
+        ) -> None:
+        self.task = task
+        self.flow_run = flow_run
+        self.attempt = attempt
+        self.retry_max = retry_max if retry_max is not None else self.task.retry_max
+        self.retry_delay = retry_delay if retry_delay is not None else self.task.retry_delay
+        self.created_datetime: datetime = datetime.now()
+        self.modified_datetime: datetime = self.created_datetime
+
+        self._status = status
+
+        super(TaskRun, self).__init__(
+            run_id,
+            flow_run_id=self.flow_run.id,
+            task_id=self.task.id
+        )
+
+        self.logger = get_task_run_logger(
+            self.flow_run.flow.id,
+            self.task.id,
+            self.id
+        )
+
+    @property
+    def flow_run_id(self) -> str:
+        return self.flow_run.id
+
+    @property
+    def task_id(self) -> str:
+        return self.task.id
+
+    @property
+    def task_name(self) -> str:
+        return self.task.name
+
+    @property
+    def status(self) -> TaskRunStatus:
+        '''Return task run status.'''
+        return self._status
+
+    @status.setter
+    def status(self, value: TaskRunStatus) -> None:
+        if not isinstance(value, TaskRunStatus):
+            raise TypeError(
+                f"Run status of flow '{self.task.name}' should be 'TaskRunStatus' not '{type(value)}'."
+            )
+
+        if self._status == TaskRunStatus.DONE or (
+                value not in (TaskRunStatus.UNKNOWN, TaskRunStatus.DONE)
+                and value.value <= self._status.value
+            ):
+            raise ValueError(
+                f"Run status of flow '{self.task.name}' cannot be set to similar or backward state from "
+                f"'{self._status.name}' to '{value.name}'."
+            )
+
+        self.logger.debug(f"Set task run status from '{self._status.name}' to '{value.name}'.")
+        self._status = value
+        self._model.status = self._status
+        self.modified_datetime = datetime.now()
+        self._model.modified_datetime = self.modified_datetime
+        self.save()
+
+    def _setup_existing_model(
+            self,
+            __id: str = None,
+            flow_run_id: str = None,
+            task_id: str = None
+        ) -> None:
+        if __id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(self.__model__.id == __id)
+                    .limit(1)
+                    [0]
                 )
 
-            if 'attrs' in task_kwargs:
-                raise ValueError(
-                    "Task 'attrs' is a reserved keyword. "
-                    "Please use different keyword name."
-                )
+                self._model_exists = True
 
-            if 'inputs' in task_kwargs:
-                raise ValueError(
-                    "Task 'inputs' is a reserved keyword. "
-                    "Please use different keyword name."
-                )
+            except IndexError:
+                pass
 
-            if output_file and task_output_path is None:
-                raise AttributeError("Task 'task_output_path' should be filled.")
-
-            class PythonTask(Task):
-                def __init__(self):
-                    super().__init__(
-                        name=task_name,
-                        output_path=task_output_path,
-                        retry_max=task_retry_max,
-                        retry_delay=task_retry_delay,
-                        attrs=attrs,
-                        flow=task_flow
+        elif flow_run_id is not None and task_id is not None:
+            try:
+                self._model = (
+                    self.__model__.select()
+                    .where(
+                        (self.__model__.flow_run == self.flow_run_id)
+                        & (self.__model__.task == task_id)
                     )
-                    self.task_args = task_args
-                    self.task_kwargs = task_kwargs
+                    .order_by(self.__model__.attempt.desc())
+                    .limit(1)
+                    [0]
+                )
+                self._model_exists = True
 
-                def run(self, logger: logging.Logger):
-                    if 'logger' in func.__code__.co_varnames:
-                        self.task_kwargs['logger'] = logger
+            except IndexError:
+                pass
 
-                    if 'attrs' in func.__code__.co_varnames:
-                        self.task_kwargs['attrs'] = self.attrs
+    def total_seconds(self) -> Union[float, None]:
+        '''Return total seconds from task run start to task run end.'''
+        if self.status in (
+                TaskRunStatus.DONE,
+                TaskRunStatus.FAILED,
+                TaskRunStatus.FAILED_BY_USER,
+            ):
+            return (self.modified_datetime - self.created_datetime).total_seconds()
 
-                    if 'inputs' in func.__code__.co_varnames:
-                        self.task_kwargs['inputs'] = self.inputs()
+    def execute(self) -> None:
+        '''Execute task run and record the status.'''
+        logger = get_task_run_logger(
+            self.flow_run.flow.id,
+            self.task.id,
+            self.id
+        )
 
-                    output_obj = func(*self.task_args, **self.task_kwargs)
-                    if output_file:
-                        with self.output().open('w') as f:
-                            f.write(output_obj)
-                    else:
-                        self.output().set(output_obj)
+        try:
+            self._start_datetime = datetime.now()
+            self.status = TaskRunStatus.RUNNING
+            self.task.run(logger=logger)
+            self.status = TaskRunStatus.DONE
 
-            return PythonTask()
+        except Exception as exc:
+            self.status = TaskRunStatus.FAILED
+            logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
 
-        return task_register
+    def next_attempt(self) -> TaskRun:
+        task_run = TaskRun(
+            self.flow_run,
+            task=self.task,
+            attempt=self.attempt + 1,
+            retry_max=self.retry_max,
+            retry_delay=self.retry_delay
+        )
+        self.flow_run.add_task_run(task_run)
+        return task_run
 
-    if len(args) > 0:
-        if callable(args[0]):
-            return task_decorator(args[0])
-
-    return task_decorator
+    def __repr__(self) -> str:
+        return obj_repr(self, 'id', 'flow_run_id', 'task_name', 'attempt', 'status')

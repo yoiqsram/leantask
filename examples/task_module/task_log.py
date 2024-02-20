@@ -1,7 +1,7 @@
 import logging
-from leantask import task
+from leantask import python_task
 
 
-@task
+@python_task
 def logging_task(message: str, logger: logging.Logger):
     logger.info(message)

@@ -1,7 +1,7 @@
 import argparse
 from typing import Callable
 
-from ...context import GlobalContext
+from ...utils.string import quote
 
 
 def add_info_parser(subparsers) -> Callable:
@@ -16,12 +16,11 @@ def add_info_parser(subparsers) -> Callable:
         description='Options to show. Default to show project info.',
     )
 
-    project_parser = options_subparser.add_parser(
+    options_subparser.add_parser(
         'project',
         help='Show project info.'
     )
-
-    flow_parser = options_subparser.add_parser(
+    options_subparser.add_parser(
         'flow',
         help='Show flow info.'
     )
@@ -37,32 +36,37 @@ def show_info(args: argparse.Namespace):
 
 
 def show_project_info() -> None:
-    from ...database.orm import open_db_session, MetadataModel
+    from ...database import MetadataModel
 
     print('Leantask Project Information.')
-    with open_db_session(GlobalContext.database_path()) as session:
-        for metadata in session.query(MetadataModel).all():
-            print(f"{metadata.name}: {metadata.value}")
+    for metadata in MetadataModel.select():
+        print(f"{metadata.name}: {metadata.value}")
 
 
 def show_flow_info() -> None:
-    from ...database.models import FlowModel, FlowScheduleModel
-    from ...database.orm import open_db_session, NoResultFound
+    from ...database import FlowModel, FlowScheduleModel
 
-    with open_db_session(GlobalContext.database_path()) as session:
-        print('Found', session.query(FlowModel).count(), 'workflow(s) in the project.')
-        for flow_record in session.query(FlowModel).all():
-            try:
-                schedule_record = (
-                    session.query(FlowScheduleModel)
-                    .filter(FlowScheduleModel.flow_id == flow_record.id)
-                    .one()
-                )
-                print(
-                    f"- {flow_record.name} (path={repr(flow_record.path)}",
-                    f"next_schedule={repr(schedule_record.schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
-                    f"max_delay={flow_record.max_delay})",
-                )
+    flow_models = list(FlowModel.select())
+    print('Found', len(flow_models), 'workflow(s) in the project.')
+    for flow_model in flow_models:
+        if not flow_model.active:
+            print(
+                f"- {flow_model.name} (path={flow_model.path} inactive)"
+            )
+            continue
 
-            except NoResultFound:
-                print('-', f"{flow_record.name} (path='{flow_record.path}' no_schedule")
+        schedule_models = list(
+            FlowScheduleModel.select()
+            .where(FlowScheduleModel.flow_id == flow_model.id)
+            .order_by(FlowScheduleModel.schedule_datetime)
+        )
+
+        if len(schedule_models) == 0:
+            print('-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
+            continue
+
+        print(
+            f"- {flow_model.name} (path={flow_model.path}",
+            f"next_schedule={quote(schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
+            f"max_delay={schedule_models[0].max_delay})",
+        )

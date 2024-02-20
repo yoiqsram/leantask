@@ -32,7 +32,7 @@ def add_discover_parser(subparsers) -> Callable:
 
 
 def discover_flows(args: argparse.Namespace):
-    from ...discover import update_flow_records
+    from ...discover import index_all_flows
 
     global logger
     if args.log_file is not None:
@@ -46,8 +46,5 @@ def discover_flows(args: argparse.Namespace):
     GlobalContext.SCHEDULER_SESSION_ID = args.scheduler_session_id
 
     logger.debug('Searching for workflows...')
-    flow_records = update_flow_records(
-        log_file_path=log_file_path
-    )
-
+    flow_records = index_all_flows(log_file_path=log_file_path)
     logger.info(f'Total flow(s) found: {len(flow_records)}.')

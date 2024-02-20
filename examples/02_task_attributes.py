@@ -1,8 +1,8 @@
 import logging
-from leantask import task, Flow
+from leantask import python_task, Flow
 
 
-@task(attrs={'retry_count': 0})
+@python_task(attrs={'retry_count': 0})
 def fail_task(
         attrs,
         logger: logging.Logger,

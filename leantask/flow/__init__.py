@@ -1,2 +1,2 @@
 from .flow import Flow, FlowRun
-from .task import Task, TaskRun, task
+from .task import Task, TaskRun, python_task

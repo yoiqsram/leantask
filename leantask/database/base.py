@@ -6,7 +6,7 @@ from .common import open_db_connection
 database = open_db_connection(
     GlobalContext.database_path().resolve()
 )
-log_database = database = open_db_connection(
+log_database = open_db_connection(
     GlobalContext.log_database_path().resolve()
 )
 

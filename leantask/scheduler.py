@@ -8,7 +8,7 @@ from typing import Dict, Tuple, Union
 
 from .context import GlobalContext
 from .database.execute import create_scheduler_session, get_scheduled_run_tasks
-from .discover import update_flow_records
+from .discover import index_all_flows
 from .enum import FlowIndexStatus, FlowRunStatus, FlowScheduleStatus
 from .logging import get_logger
 from .utils.cache import save_cache, clear_cache
@@ -161,7 +161,7 @@ class Scheduler:
             executor: futures.ThreadPoolExecutor = None
         ) -> None:
         logger.debug('Start run routine by updating flow indexes on database.')
-        updated_flow_records = update_flow_records(self.flow_records, self.log_path)
+        updated_flow_records = index_all_flows(self.flow_records, self.log_path)
         self.flow_records = set(updated_flow_records.keys())
         for flow_record in self.flow_records:
             if not flow_record.active or updated_flow_records[flow_record] in (

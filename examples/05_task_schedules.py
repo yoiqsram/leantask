@@ -1,8 +1,8 @@
 import logging
-from leantask import task, Flow
+from leantask import python_task, Flow
 
 
-@task
+@python_task
 def scheduled_task(logger: logging.Logger):
     logger.info(f'Succesfully run scheduled task.')
 
@@ -12,4 +12,4 @@ with Flow(
         description='Example of task schedules.',
         cron_schedules='*/2 * * * *'
     ) as flow:
-    task = scheduled_task()
+    python_task = scheduled_task()

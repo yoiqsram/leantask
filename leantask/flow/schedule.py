@@ -5,7 +5,7 @@ from typing import List, Union
 class Schedule:
     def __init__(
             self,
-            cron_schedules: [str, List[str]],
+            cron_schedules: Union[str, List[str]],
             start_datetime: datetime = None,
             end_datetime: datetime = None,
         ) -> None:

@@ -1,15 +1,15 @@
 import json
 import logging
-from leantask import task, Flow
+from leantask import python_task, Flow
 from pathlib import Path
 
 
-@task
+@python_task
 def print_task(message: str, logger: logging.Logger):
     logger.info(message)
 
 
-@task(attrs={'attempt_count': 0})
+@python_task(attrs={'attempt_count': 0})
 def fail_task(
         attrs,
         logger: logging.Logger,
@@ -22,13 +22,13 @@ def fail_task(
 
     logger.info(message)
 
-@task
+@python_task
 def json_output(data: dict, logger: logging.Logger):
     logger.info('Pass data to the next task.')
     return data
 
 
-@task(output_file=True)
+@python_task(output_file=True)
 def write_file(inputs, logger: logging.Logger):
     logger.info(f'Write file from inputs: {inputs}')
     return json.dumps(inputs)

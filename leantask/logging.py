@@ -6,11 +6,17 @@ from .context import GlobalContext
 LOG_SHORT_FORMAT = '[%(asctime)s] %(message)s'
 LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)7s (%(name)s) %(message)s'
 
+if GlobalContext.DEBUG_QUERY:
+    peewee_logger = logging.getLogger('peewee')
+    peewee_logger.addHandler(logging.StreamHandler())
+    peewee_logger.setLevel(logging.DEBUG)
+
 
 class FlushFileHandler(logging.FileHandler):
     def emit(self, record):
         super().emit(record)
         self.flush()
+
 
 def get_logger(
         name: str = None,

@@ -25,8 +25,9 @@ class GlobalContext:
     DATABASE_NAME: str = 'leantask.db'
     LOG_DATABASE_NAME: str = 'leantask_log.db'
 
-    LOG_DEBUG: int = False
-    LOG_QUIET: int = False
+    LOG_DEBUG: bool = False
+    LOG_QUIET: bool = False
+    DEBUG_QUERY: bool = False
 
     SCHEDULER_SESSION_ID: str = None
     CACHE_TIMEOUT: int = 1800
@@ -58,12 +59,7 @@ class GlobalContext:
 
     @classmethod
     def metadata_dir(cls) -> Path:
-        metadata_dir_path = cls.PROJECT_DIR / METADATA_DIRNAME
-
-        if not metadata_dir_path.is_dir():
-            metadata_dir_path.mkdir(parents=True)
-
-        return metadata_dir_path
+        return cls.PROJECT_DIR / METADATA_DIRNAME
 
     @classmethod
     def workflows_dir(cls) -> Path:

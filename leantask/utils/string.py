@@ -32,5 +32,5 @@ def validate_use_safe_chars(value: str) -> str:
     return value
 
 
-def generate_uuid():
+def generate_uuid() -> str:
     return str(uuid.uuid4())

@@ -1,20 +1,19 @@
-from ._base import (
-    Model, Column, BIG_STRING,
-    column_uuid_primary_key, column_current_datetime, column_modified_datetime
-)
 from ...enum import TableName
-from ...utils.string import obj_repr
+from ..base import BaseModel
+from ..common import (
+    column_sequence, column_medium_string, column_big_string, column_text,
+    column_current_datetime, column_modified_datetime
+)
 
 
-class MetadataModel(Model):
-    __tablename__ = TableName.METADATA.value
-
-    name = column_uuid_primary_key()
-    description = Column(BIG_STRING)
-    value = Column(BIG_STRING)
+class MetadataModel(BaseModel):
+    id = column_sequence(primary_key=True)
+    name = column_medium_string()
+    description = column_text(null=True)
+    value = column_big_string(null=True)
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()
 
-    def __repr__(self) -> str:
-        return obj_repr(self, 'name', 'value')
+    class Meta:
+        table_name = TableName.METADATA.value

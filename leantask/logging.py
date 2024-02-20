@@ -4,7 +4,7 @@ from pathlib import Path
 from .context import GlobalContext
 
 LOG_SHORT_FORMAT = '[%(asctime)s] %(message)s'
-LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)s (%(name)s) %(message)s'
+LOG_LONG_FORMAT = '[%(asctime)s] %(levelname)7s (%(name)s) %(message)s'
 
 
 class FlushFileHandler(logging.FileHandler):

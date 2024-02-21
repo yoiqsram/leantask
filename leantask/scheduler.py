@@ -135,7 +135,10 @@ def get_unfinished_flow_run_models():
         for flow_run_model in scheduled_flow_run_models:
             logger.info(f"Add flow run of '{flow_run_model.flow.name}'.")
             unfinished_flow_run_models.append(flow_run_model)
-    logger.info(f'Found {len(unfinished_flow_run_models)} unfinished scheduled flow run(s).')
+    if len(unfinished_flow_run_models):
+        logger.info(
+            f'Found {len(unfinished_flow_run_models)} unfinished scheduled flow run(s).'
+        )
 
     logger.debug('Get unscheduled flow run.')
     unscheduled_flow_run_models = list(
@@ -145,7 +148,10 @@ def get_unfinished_flow_run_models():
             & FlowRunModel.status.in_(unfinished_flow_run_status)
         )
     )
-    logger.info(f'Found {len(unscheduled_flow_run_models)} unscheduled flow run(s).')
+    if len(unscheduled_flow_run_models):
+        logger.info(
+            f'Found {len(unscheduled_flow_run_models)} unscheduled flow run(s).'
+        )
 
     unfinished_flow_run_models += unscheduled_flow_run_models
     return unfinished_flow_run_models

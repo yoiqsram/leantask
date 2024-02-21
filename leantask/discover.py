@@ -168,5 +168,7 @@ def index_all_flows(
         if index_status == FlowIndexStatus.UPDATED:
             total_changes += 1
 
-    logger.debug(f'Total changes made on flows: {total_changes}.')
+    if total_changes > 0:
+        logger.info(f'Total changes made on flows: {total_changes}.')
+
     return updated_flow_models

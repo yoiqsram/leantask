@@ -141,7 +141,7 @@ def index_all_flows(
 
             updated_flow_model = (
                 FlowModel.select()
-                .where(FlowModel.path == flow_model.path)
+                .where(FlowModel.path == str(flow_path))
                 .limit(1)
                 [0]
             )

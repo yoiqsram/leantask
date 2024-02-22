@@ -209,7 +209,7 @@ class Scheduler:
             self,
             executor: futures.ThreadPoolExecutor = None
         ) -> None:
-        logger.debug('Start run routine by updating flow indexes on database.')
+        logger.debug('Start run routine by updating flow indexes from database.')
         updated_flow_models = index_all_flows(self._flow_models, self.log_path)
         self._flow_models = list(updated_flow_models.keys())
         for flow_model in self._flow_models:
@@ -244,6 +244,16 @@ class Scheduler:
         logger.debug('Run routine has been completed.')
 
     async def run_loop(self) -> None:
+        logger.info('Initialize update and schedule flow indexes from database.')
+        updated_flow_models = index_all_flows(self._flow_models, self.log_path)
+        self._flow_models = list(updated_flow_models.keys())
+        for flow_model in self._flow_models:
+            schedule_flow(
+                flow_model,
+                log_file_path=self.log_path,
+                debug=self.debug
+            )
+
         with futures.ThreadPoolExecutor(max_workers=self.worker) as executor:
             while True:
                 logger.info('ALIVE')

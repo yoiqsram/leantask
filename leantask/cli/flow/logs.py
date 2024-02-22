@@ -96,7 +96,6 @@ def show_logs(
             )
 
         keyword = args.keyword.replace('.', '') + '*.log'
-        print(log_dir, keyword)
         for log_file_path in log_dir.rglob(keyword):
             return edit_log(log_file_path)
 
@@ -170,9 +169,11 @@ def edit_log(
         created_datetime: datetime = None
     ) -> None:
     print(
-        f"Inspect log '{log_file_path}'",
-        f"({created_datetime.isoformat(sep=' ', timespec='seconds')})."
-            if created_datetime is not None else None
+        f"Inspect log '{log_file_path}'"
+        + (
+            f"(created at {created_datetime.isoformat(sep=' ', timespec='seconds')})."
+            if created_datetime is not None else ''
+        )
     )
     subprocess.run(
         f'nano "{log_file_path}"',

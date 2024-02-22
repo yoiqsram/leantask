@@ -1,7 +1,5 @@
 import argparse
-from typing import Callable
-
-from ...utils.string import quote
+from typing import Callable, List
 
 
 def add_info_parser(subparsers) -> Callable:
@@ -46,31 +44,38 @@ def show_project_info() -> None:
 def show_flow_info() -> None:
     from ...database import FlowModel, FlowScheduleModel
 
-    flow_models = list(
+    flow_models: List[FlowModel] = list(
         FlowModel.select()
         .order_by(FlowModel.name)
     )
-    print('Found', len(flow_models), 'workflow(s) in the project.')
+    print('Found', len(flow_models), 'flow(s) in the project.')
     for flow_model in flow_models:
-        if not flow_model.active:
-            print(
-                f"- {flow_model.name} (path={flow_model.path} inactive)"
-            )
-            continue
-
-        schedule_models = list(
-            FlowScheduleModel.select()
-            .where(FlowScheduleModel.flow_id == flow_model.id)
-            .order_by(FlowScheduleModel.schedule_datetime)
+        print(
+            ( '[Disabled]  ' if not flow_model.active else '' )
+            + f"{flow_model.name}  {str(flow_model.id).split('-')[0]}..."
         )
-
-        if len(schedule_models) == 0:
-            print(' ', '-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
-            continue
 
         print(
-            ' ', 
-            f'- {flow_model.name} (path={flow_model.path}',
-            f"next_schedule={quote(schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
-            f'max_delay={schedule_models[0].max_delay})',
+            ' ', 'Path          :',
+            flow_model.path
         )
+
+        print(
+            ' ', 'Description   :',
+            flow_model.description
+        )
+
+        if flow_model.active:
+            schedule_models = list(
+                FlowScheduleModel.select()
+                .where(FlowScheduleModel.flow_id == flow_model.id)
+                .order_by(FlowScheduleModel.schedule_datetime)
+                .limit(1)
+            )
+            if len(schedule_models) > 0:
+                print(
+                    ' ', 'Next schedule :',
+                    schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes')
+                )
+
+        print()

@@ -6,6 +6,7 @@ from ...context import GlobalContext
 from ...utils.script import is_main_script
 from .index import add_index_parser
 from .info import add_info_parser
+from .logs import add_logs_parser
 from .run import add_run_parser
 from .schedule import add_schedule_parser
 
@@ -24,9 +25,10 @@ def parse_args(
         'info': add_info_parser(subparsers),
         'run': add_run_parser(subparsers),
         'index': add_index_parser(subparsers),
-        'schedule': add_schedule_parser(subparsers)
+        'schedule': add_schedule_parser(subparsers),
+        'logs': add_logs_parser(subparsers)
     }
-    return parser.parse_args(), command_runners
+    return parser.parse_known_args(), command_runners
 
 
 def run_cli(flow) -> None:
@@ -36,7 +38,7 @@ def run_cli(flow) -> None:
     if len(flow.tasks) == 0:
         raise ValueError('Flow must contain at least one task.')
 
-    args, command_runners = parse_args(description=flow.description)
+    (args, _), command_runners = parse_args(description=flow.description)
 
     if 'project_dir' in args and args.project_dir is not None:
         GlobalContext.set_project_dir(Path(args.project_dir).resolve())

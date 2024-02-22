@@ -5,7 +5,7 @@ from ...utils.string import quote
 
 
 def add_info_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'info',
         help='Show info about leantask project.',
         description='Show info about leantask project.'
@@ -46,7 +46,10 @@ def show_project_info() -> None:
 def show_flow_info() -> None:
     from ...database import FlowModel, FlowScheduleModel
 
-    flow_models = list(FlowModel.select())
+    flow_models = list(
+        FlowModel.select()
+        .order_by(FlowModel.name)
+    )
     print('Found', len(flow_models), 'workflow(s) in the project.')
     for flow_model in flow_models:
         if not flow_model.active:
@@ -62,11 +65,12 @@ def show_flow_info() -> None:
         )
 
         if len(schedule_models) == 0:
-            print('-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
+            print(' ' * 3, '-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
             continue
 
         print(
-            f"- {flow_model.name} (path={flow_model.path}",
+            ' ' * 3, 
+            f'- {flow_model.name} (path={flow_model.path}',
             f"next_schedule={quote(schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
-            f"max_delay={schedule_models[0].max_delay})",
+            f'max_delay={schedule_models[0].max_delay})',
         )

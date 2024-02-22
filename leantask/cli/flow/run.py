@@ -15,7 +15,7 @@ logger = None
 
 
 def add_run_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'run',
         help='run flow',
         description='run flow'

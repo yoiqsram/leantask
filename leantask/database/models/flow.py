@@ -13,7 +13,7 @@ from ..log_models import FlowLogModel, FlowRunLogModel
 class FlowModel(BaseModel):
     id = column_uuid_primary_key()
     path = column_big_string(null=True)
-    name = column_medium_string()
+    name = column_medium_string(unique=True)
     description = column_text(null=True)
     cron_schedules = column_medium_string(null=True)
     start_datetime = column_datetime(null=True)
@@ -27,7 +27,6 @@ class FlowModel(BaseModel):
 
     class Meta:
         table_name = TableName.FLOW.value
-        constraints = [SQL('UNIQUE (path, name)')]
         log_model = FlowLogModel
 
 

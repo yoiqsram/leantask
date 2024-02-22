@@ -19,7 +19,7 @@ from ...utils.string import quote
 
 
 def add_init_parser(subparsers) -> None:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'init',
         help='Initialize leantask project.',
         description='Initialize leantask project.'

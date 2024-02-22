@@ -11,7 +11,7 @@ logger = None
 
 
 def add_index_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'index',
         help='index flow to database',
         description='index flow to database'

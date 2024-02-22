@@ -5,6 +5,7 @@ from ...context import GlobalContext
 from .discover import add_discover_parser
 from .init import add_init_parser
 from .info import add_info_parser
+from .flow import add_flow_parser
 from .scheduler import add_scheduler_parser
 
 
@@ -22,14 +23,15 @@ def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
         'init': add_init_parser(subparsers),
         'info': add_info_parser(subparsers),
         'discover': add_discover_parser(subparsers),
+        'flow': add_flow_parser(subparsers),
         'scheduler': add_scheduler_parser(subparsers)
     }
 
-    return parser.parse_args(), command_runners
+    return parser.parse_known_args(), command_runners
 
 
 def cli():
-    args, command_runners = parse_args()
+    (args, _), command_runners = parse_args()
 
     if 'debug' in args and args.debug:
         GlobalContext.LOG_DEBUG = True

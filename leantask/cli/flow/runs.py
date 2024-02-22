@@ -43,6 +43,11 @@ def add_runs_parser(subparsers) -> Callable:
         help='Search keyword. Default to flow run id.'
     )
     search_option.add_argument(
+        '--by-task',
+        action='store_true',
+        help='Enable to search by task run id.'
+    )
+    search_option.add_argument(
         '--by-datetime',
         action='store_true',
         help=(
@@ -75,12 +80,21 @@ def show_runs(
 
     elif args.option == 'search':
         if args.by_datetime:
-            schedule_datetime = datetime.fromisoformat(args.keyword.replace(' ', 'T'))
-            print(args.keyword.replace(' ', 'T'))
+            schedule_datetime = datetime.fromisoformat(args.keyword)
             flow_run_models = list(
                 flow._model.flow_runs
                 .where(FlowRunModel.schedule_datetime == schedule_datetime)
                 .order_by(FlowRunModel.modified_datetime.desc())
+                .limit(1)
+            )
+
+        elif args.by_task:
+            keyword = args.keyword.replace('.', '') + '*'
+            flow_run_models = list(
+                flow._model.flow_runs
+                .join(TaskRunModel)
+                .where(TaskRunModel.id.like(keyword))
+                .order_by(TaskRunModel.modified_datetime.desc())
                 .limit(1)
             )
 

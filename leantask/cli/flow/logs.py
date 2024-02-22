@@ -41,6 +41,24 @@ def add_logs_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
 
+    search_option = option.add_parser(
+        'search',
+        help='Search run log.'
+    )
+    search_option.add_argument(
+        'keyword',
+        help='Search keyword. Default for flow run id.'
+    )
+    search_option.add_argument(
+        '--by-task',
+        action='store_true',
+        help='Enable to search by task run id.'
+    )
+    search_option.add_argument(
+        '--project-dir', '-P',
+        help='Project directory. Default to current directory.'
+    )
+
     inspect_option = option.add_parser(
         'inspect',
         help='Show list of log files from the latest runs.'
@@ -63,24 +81,26 @@ def show_logs(
         args: argparse.Namespace,
         flow: Flow
     ) -> None:
-    log_dir = GlobalContext.log_dir() / 'flow_runs' / str(flow.id)
-    log_file_paths = {
-        get_file_created_datetime(log_file_path): log_file_path
-        for log_file_path in log_dir.rglob('*.log')
-    }
+    log_dir = (
+        GlobalContext.log_dir()
+        / 'flow_runs'
+        / str(flow.id)
+    )
 
-    if len(log_file_paths) == 0:
-        print('No log file was found.')
-        return
+    if args.option == 'search':
+        if args.by_task:
+            log_dir = (
+                GlobalContext.log_dir()
+                / 'task_runs'
+                / str(flow.id)
+            )
 
-    log_file_created_datetime_sorted = sorted(list(log_file_paths.keys()))
+        keyword = args.keyword.replace('.', '') + '*.log'
+        print(log_dir, keyword)
+        for log_file_path in log_dir.rglob(keyword):
+            return edit_log(log_file_path)
 
-    log_file_paths_sorted: List[Tuple[datetime, Path]] = []
-    for created_datetime in log_file_created_datetime_sorted:
-        log_file_paths_sorted.append((
-            created_datetime,
-            log_file_paths[created_datetime]
-        ))
+    log_file_paths_sorted = get_all_log_file_paths_sorted(log_dir)
 
     if args.option == 'list':
         show_log_list(
@@ -90,10 +110,35 @@ def show_logs(
         )
 
     elif args.option == 'inspect':
-        inspect_log(
-            log_file_paths_sorted,
-            last=args.last
-        )
+        if args.last > len(log_file_paths_sorted):
+            print(
+                f'Failed to open the latest {args.last} log.',
+                f'There are only {len(log_file_paths_sorted)} logs.'
+            )
+            return
+
+        return edit_log(*log_file_paths_sorted[-args.last])
+
+
+def get_all_log_file_paths_sorted(log_dir: Path):
+    log_file_paths = {
+        get_file_created_datetime(log_file_path): log_file_path
+        for log_file_path in log_dir.rglob('*.log')
+    }
+
+    log_file_path_count = len(log_file_paths)
+    if log_file_path_count == 0:
+        print('No log file was found.')
+        raise SystemExit()
+
+    log_file_created_datetime_sorted = sorted(list(log_file_paths.keys()))
+
+    log_file_paths_sorted: List[Tuple[datetime, Path]] = []
+    for created_datetime in log_file_created_datetime_sorted:
+        log_file_paths_sorted.append((
+            log_file_paths[created_datetime],
+            created_datetime
+        ))
 
 
 def show_log_list(
@@ -120,19 +165,14 @@ def show_log_list(
         )
 
 
-def inspect_log(
-        log_file_paths_sorted: List[Tuple[datetime, Path]],
-        last: int
+def edit_log(
+        log_file_path: Path,
+        created_datetime: datetime = None
     ) -> None:
-    log_file_path_count = len(log_file_paths_sorted)
-    if last > log_file_path_count:
-        print(f'Failed to open the latest {last} log. There are only {log_file_path_count} logs.')
-        return
-
-    created_datetime, log_file_path = log_file_paths_sorted[-last]
     print(
-        f"Inspect latest log '{log_file_path}'",
+        f"Inspect log '{log_file_path}'",
         f"({created_datetime.isoformat(sep=' ', timespec='seconds')})."
+            if created_datetime is not None else None
     )
     subprocess.run(
         f'nano "{log_file_path}"',

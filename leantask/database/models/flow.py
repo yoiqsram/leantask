@@ -69,6 +69,7 @@ class FlowRunModel(BaseModel):
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()
+    started_datetime = column_datetime(null=True)
 
     class Meta:
         table_name = TableName.FLOW_RUN.value

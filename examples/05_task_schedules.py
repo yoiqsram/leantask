@@ -10,6 +10,7 @@ def scheduled_task(logger: logging.Logger):
 with Flow(
         'task_schedules',
         description='Example of task schedules.',
-        cron_schedules='*/2 * * * *'
+        cron_schedules='*/2 * * * *',
+        max_delay=60,
     ) as flow:
     python_task = scheduled_task()

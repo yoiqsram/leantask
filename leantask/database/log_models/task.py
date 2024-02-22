@@ -4,7 +4,7 @@ from ..common import (
     ForeignKeyField,
     column_integer, column_small_string, column_medium_string,
     column_uuid_string, column_uuid_primary_key,
-    column_current_datetime
+    column_datetime, column_current_datetime
 )
 from .flow import FlowLogModel, FlowRunLogModel
 from .session import SchedulerSessionModel
@@ -79,6 +79,7 @@ class TaskRunLogModel(LogModel):
         null=True
     )
     created_datetime = column_current_datetime()
+    started_datetime = column_datetime(null=True)
 
     class Meta:
         table_name = LogTableName.TASK_RUN.value

@@ -130,22 +130,23 @@ def show_flow_run_info(
 
     if flow_run_model.schedule_datetime is not None:
         print(
-            ' ', 'Scheduled datetime :',
+            ' ', 'Schedule datetime :',
             flow_run_model.schedule_datetime.isoformat(sep=' ', timespec='minutes')
         )
 
-    print(
-        ' ', 'Started datetime   :',
-        flow_run_model.created_datetime.isoformat(sep=' ', timespec='milliseconds')
-        + (
-            ' (Manual run)'
-            if flow_run_model.is_manual
-            else ''
+    if flow_run_model.started_datetime is not None:
+        print(
+            ' ', 'Started datetime  :',
+            flow_run_model.started_datetime.isoformat(sep=' ', timespec='milliseconds')
+            + (
+                ' (Manual run)'
+                if flow_run_model.is_manual
+                else ''
+            )
         )
-    )
 
     print(
-        ' ', 'Status             :',
+        ' ', 'Status            :',
         flow_run_model.status
     )
 
@@ -154,14 +155,14 @@ def show_flow_run_info(
             FlowRunStatus.FAILED.name
         ):
         print(
-            ' ', 'Time elapsed       :',
-            f'{(flow_run_model.modified_datetime - flow_run_model.created_datetime).total_seconds():.2f}s'
+            ' ', 'Time elapsed      :',
+            f'{(flow_run_model.modified_datetime - flow_run_model.started_datetime).total_seconds():.2f}s'
         )
 
     elif flow_run_model.status == FlowRunStatus.RUNNING.name:
         print(
-            ' ', 'Time elapsed       :',
-            f'{(datetime.now() - flow_run_model.created_datetime).total_seconds():.2f}s'
+            ' ', 'Time elapsed      :',
+            f'{(datetime.now() - flow_run_model.started_datetime).total_seconds():.2f}s'
         )
 
     if task_info:
@@ -169,7 +170,7 @@ def show_flow_run_info(
             flow_run_model.task_runs
             .order_by(TaskRunModel.created_datetime)
         )
-        print(' ', 'Tasks              :', end=' ')
+        print(' ', 'Tasks             :', end=' ')
         if len(task_run_models) == 0:
             print('No task run was found')
             return
@@ -213,7 +214,7 @@ def show_task_run_info(task_run_model: TaskRunModel) -> None:
     )
 
     print(
-        '   ', 'Status             :',
+        '   ', 'Status            :',
         task_run_model.status
     )
 
@@ -222,12 +223,12 @@ def show_task_run_info(task_run_model: TaskRunModel) -> None:
             FlowRunStatus.FAILED.name
         ):
         print(
-            '   ', 'Time elapsed       :',
-            f'{(task_run_model.modified_datetime - task_run_model.created_datetime).total_seconds():.2f}s'
+            '   ', 'Time elapsed      :',
+            f'{(task_run_model.modified_datetime - task_run_model.started_datetime).total_seconds():.2f}s'
         )
 
     elif task_run_model.status == FlowRunStatus.RUNNING.name:
         print(
-            '   ', 'Time elapsed       :',
-            f'{(datetime.now() - task_run_model.created_datetime).total_seconds():.2f}s'
+            '   ', 'Time elapsed      :',
+            f'{(datetime.now() - task_run_model.started_datetime).total_seconds():.2f}s'
         )

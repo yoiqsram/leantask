@@ -76,7 +76,7 @@ def show_info(
         print(
             ' ', '- Last run status          :',
             flow_run_models[-1].status,
-            f" (for {(flow_run_models[-1].modified_datetime - flow_run_models[-1].created_datetime).total_seconds():.2f}s",
+            f" (for {(flow_run_models[-1].modified_datetime - flow_run_models[-1].started_datetime).total_seconds():.2f}s",
             f"at {flow_run_models[-1].created_datetime.isoformat(sep=' ', timespec='seconds')})"
         )
 
@@ -89,7 +89,7 @@ def show_info(
         if len(done_flow_run_models) > 0:
             print(
                 len(done_flow_run_models),
-                f" (latest run at {done_flow_run_models[-1].created_datetime.isoformat(sep=' ', timespec='seconds')})"
+                f" (latest run at {done_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')})"
             )
         else:
             print(0)
@@ -103,7 +103,7 @@ def show_info(
         if len(failed_flow_run_models) > 0:
             print(
                 len(failed_flow_run_models),
-                f" (latest run at {failed_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
+                f" (latest run at {failed_flow_run_models[-1].started_datetime.isoformat(sep=' ')})"
             )
         else:
             print(0)
@@ -117,7 +117,7 @@ def show_info(
         if len(running_flow_run_models) > 0:
             print(
                 len(running_flow_run_models),
-                f" (latest run at {running_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
+                f" (latest run at {running_flow_run_models[-1].started_datetime.isoformat(sep=' ')})"
             )
         else:
             print(0)
@@ -125,7 +125,7 @@ def show_info(
         print(' ', '- Avg. running time (DONE) :', end=' ')
         if len(done_flow_run_models) > 0:
             avg_running_time = sum([
-                (flow_run_model.modified_datetime - flow_run_model.created_datetime).total_seconds()
+                (flow_run_model.modified_datetime - flow_run_model.started_datetime).total_seconds()
                 for flow_run_model in done_flow_run_models
             ]) / len(done_flow_run_models)
             print(f'{avg_running_time:.2f}s')

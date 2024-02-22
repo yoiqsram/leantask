@@ -59,6 +59,7 @@ class FlowRunLogModel(LogModel):
         null=True
     )
     created_datetime = column_current_datetime()
+    started_datetime = column_datetime(null=True)
 
     class Meta:
         table_name = LogTableName.FLOW_RUN.value

@@ -5,7 +5,7 @@ from typing import Callable
 
 from ...context import GlobalContext
 from ...database import FlowScheduleModel
-from ...enum import FlowRunStatus, FlowScheduleStatus
+from ...enum import FlowRunStatus, FlowScheduleStatus, TaskRunStatus
 from ...flow import Flow, FlowRun, TaskRun
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
@@ -176,7 +176,12 @@ def update_schedule(
                     + f' and currently running. '
                     + f'New schedule can only be set after passing its max delay of {flow_run_model.max_delay}s.'
                 )
-                continue
+                for task_run_model in flow_run_model.task_runs:
+                    task_run_model.status = TaskRunStatus.FAILED_TIMEOUT_DELAY
+                    task_run_model.save()
+                flow_run_model.status == FlowRunStatus.FAILED_TIMEOUT_DELAY
+                flow_run_model.save()
+                flow_schedule_model.delete_instance()
 
         except IndexError:
             if not force:

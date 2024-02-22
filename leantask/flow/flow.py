@@ -296,6 +296,8 @@ class FlowRun(ModelMixin):
         self._model.status = self._status
         self.modified_datetime = datetime.now()
         self._model.modified_datetime = self.modified_datetime
+        if value == FlowRunStatus.RUNNING:
+            self._model.started_datetime = self.modified_datetime
         self.save()
 
         if self._status in (
@@ -315,6 +317,10 @@ class FlowRun(ModelMixin):
                 if task_run.status == TaskRunStatus.PENDING:
                     task_run.status = TaskRunStatus.CANCELED
 
+    @property
+    def started_datetime(self) -> datetime:
+        return self._model.started_datetime
+
     def add_task_run(self, task_run: TaskRun) -> None:
         if not isinstance(task_run, TaskRun):
             raise TypeError()
@@ -325,6 +331,11 @@ class FlowRun(ModelMixin):
         self.logger.info(f"Run flow '{self.flow.name}'.")
 
         has_failed = False
+        task_run_sorted = self._task_runs_sorted.values()
+        if len(task_run_sorted) == 0:
+            has_failed = True
+            self.logger.error('No task run was found.')
+
         for task_run in self._task_runs_sorted.values():
             self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
 
@@ -380,10 +391,10 @@ class FlowRun(ModelMixin):
 
     def total_seconds(self) -> Union[float, None]:
         if self._status in (
-                FlowRunStatus.FAILED,
-                FlowRunStatus.DONE
+                FlowRunStatus.DONE,
+                FlowRunStatus.FAILED
             ):
-            return (self.modified_datetime - self.created_datetime).total_seconds()
+            return (self.modified_datetime - self.started_datetime).total_seconds()
 
     def create_all_task_runs(self):
         for task in self.flow.tasks_sorted:

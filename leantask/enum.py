@@ -59,6 +59,12 @@ class FlowRunStatus(UnknownEnumMixin, Enum):
     FAILED = 30
     '''Tasks has been run, but the endpoint task in the flow is failed.'''
 
+    FAILED_TIMEOUT_DELAY = 31
+    '''The flow is failed due to late run over the max delay time.'''
+
+    FAILED_TIMEOUT_RUN = 32
+    '''The flow is failed due to running time was too long and reached time out.'''
+
     UNKNOWN = 1
 
 
@@ -78,7 +84,13 @@ class TaskRunStatus(UnknownEnumMixin, Enum):
     FAILED = 30
     '''An error is occured during running the task.'''
 
-    FAILED_BY_USER = 31
+    FAILED_TIMEOUT_DELAY = 31
+    '''The task is failed due to late run over the max delay time.'''
+
+    FAILED_TIMEOUT_RUN = 32
+    '''The task is failed due to running time was too long and reached time out.'''
+
+    FAILED_BY_USER = 33
     '''The task is failed due to user interuption.'''
 
     FAILED_UPSTREAM = 39

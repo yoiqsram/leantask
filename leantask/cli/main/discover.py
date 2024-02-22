@@ -9,7 +9,7 @@ from ...utils.string import quote
 
 
 def add_discover_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'discover',
         help='Discover workflows and indexed them.',
         description='Discover workflows and indexed them.'

@@ -14,7 +14,7 @@ logger = None
 
 
 def add_schedule_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'schedule',
         help='schedule to queue system',
         description='schedule to queue system'

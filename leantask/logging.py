@@ -72,3 +72,13 @@ def get_task_run_logger(
         task_run_id
     )
     return get_logger('task', log_file_path)
+
+
+def get_logger_log_file_path(
+        logger: logging.Logger
+    ) -> Path:
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            return Path(handler.baseFilename)
+
+    raise FileNotFoundError

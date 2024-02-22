@@ -3,7 +3,7 @@ from typing import Callable
 
 
 def add_scheduler_parser(subparsers) -> Callable:
-    parser = subparsers.add_parser(
+    parser: argparse.ArgumentParser = subparsers.add_parser(
         'scheduler',
         help='Leantask scheduler',
         description='Leantask scheduler'

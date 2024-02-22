@@ -65,11 +65,11 @@ def show_flow_info() -> None:
         )
 
         if len(schedule_models) == 0:
-            print(' ' * 3, '-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
+            print(' ', '-', f"{flow_model.name} (path='{flow_model.path}' no_schedule)")
             continue
 
         print(
-            ' ' * 3, 
+            ' ', 
             f'- {flow_model.name} (path={flow_model.path}',
             f"next_schedule={quote(schedule_models[0].schedule_datetime.isoformat(sep=' ', timespec='minutes'))}",
             f'max_delay={schedule_models[0].max_delay})',

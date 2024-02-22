@@ -33,7 +33,7 @@ def show_info(
     ) -> None:
     # Show flow name and description
     print(flow.name)
-    print(' ' * 3, flow.description)
+    print(' ', flow.description)
 
     # Show index status
     print()
@@ -53,7 +53,7 @@ def show_info(
     print()
     print(f'{len(flow.tasks)} tasks (sorted):')
     for task in flow.tasks_sorted:
-        print(' ' * 3, '-', task.name)
+        print(' ', '-', task.name)
 
     if not args.all:
         return
@@ -74,8 +74,7 @@ def show_info(
     if len(flow_run_models) > 0:
         print('Run statistics:')
         print(
-            ' ' * 3,
-            '- Last run status          :',
+            ' ', '- Last run status          :',
             flow_run_models[-1].status,
             f" (for {(flow_run_models[-1].modified_datetime - flow_run_models[-1].created_datetime).total_seconds():.2f}s",
             f"at {flow_run_models[-1].created_datetime.isoformat(sep=' ', timespec='seconds')})"
@@ -86,7 +85,7 @@ def show_info(
             for flow_run_model in flow_run_models
             if flow_run_model.status == FlowRunStatus.DONE.name
         ]
-        print(' ' * 3, '- Success runs             :', end=' ')
+        print(' ', '- Success runs             :', end=' ')
         if len(done_flow_run_models) > 0:
             print(
                 len(done_flow_run_models),
@@ -100,7 +99,7 @@ def show_info(
             for flow_run_model in flow_run_models
             if flow_run_model.status == FlowRunStatus.FAILED.name
         ]
-        print(' ' * 3, '- Failed runs              :', end=' ')
+        print(' ', '- Failed runs              :', end=' ')
         if len(failed_flow_run_models) > 0:
             print(
                 len(failed_flow_run_models),
@@ -114,7 +113,7 @@ def show_info(
             for flow_run_model in flow_run_models
             if flow_run_model.status == FlowRunStatus.RUNNING.name
         ]
-        print(' ' * 3, '- Still running            :', end=' ')
+        print(' ', '- Still running            :', end=' ')
         if len(running_flow_run_models) > 0:
             print(
                 len(running_flow_run_models),
@@ -123,7 +122,7 @@ def show_info(
         else:
             print(0)
 
-        print(' ' * 3, '- Avg. running time (DONE) :', end=' ')
+        print(' ', '- Avg. running time (DONE) :', end=' ')
         if len(done_flow_run_models) > 0:
             avg_running_time = sum([
                 (flow_run_model.modified_datetime - flow_run_model.created_datetime).total_seconds()
@@ -142,11 +141,11 @@ def show_info(
         print(f'Scheduled run datetime - {len(flow_schedule_models)} schedule(s):')
         for i, flow_schedule_model in enumerate(flow_schedule_models):
             if i == max_items:
-                print(' ' * 3, '- etc')
+                print(' ', '- etc')
                 break
 
             print(
-                ' ' * 3,
+                ' ',
                 f"- {flow_schedule_model.schedule_datetime.isoformat(sep=' ', timespec='minutes')}"
             )
 

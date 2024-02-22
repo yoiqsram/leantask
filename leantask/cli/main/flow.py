@@ -23,17 +23,21 @@ def add_flow_parser(subparsers) -> Callable:
 
 
 def execute_flow_command(args: argparse.Namespace):
-    flow_model = (
-        FlowModel.select()
-        .where(FlowModel.name == args.flow_name)
-        .limit(1)
-        [0]
-    )
-    flow_path = Path(flow_model.path).resolve()
+    try:
+        flow_model = (
+            FlowModel.select()
+            .where(FlowModel.name == args.flow_name)
+            .limit(1)
+            [0]
+        )
+        flow_path = Path(flow_model.path).resolve()
 
-    flow_args = sys.argv[1:]
-    flow_command = (
-        f'{quote(sys.executable)} {quote(flow_path)} '
-        + ' '.join(flow_args[2:])
-    )
-    subprocess.run(flow_command, shell=True)
+        flow_args = sys.argv[1:]
+        flow_command = (
+            f'{quote(sys.executable)} {quote(flow_path)} '
+            + ' '.join(flow_args[2:])
+        )
+        subprocess.run(flow_command, shell=True)
+
+    except IndexError:
+        print(f"No flow named '{args.flow_name}' was found.")

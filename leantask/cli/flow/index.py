@@ -3,6 +3,7 @@ import sys
 from typing import Callable
 
 from ...context import GlobalContext
+from ...flow import Flow
 from ...enum import FlowIndexStatus
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
@@ -42,7 +43,10 @@ def add_index_parser(subparsers) -> Callable:
     return index_flow
 
 
-def index_flow(args: argparse.Namespace, flow) -> None:
+def index_flow(
+        args: argparse.Namespace,
+        flow: Flow
+    ) -> None:
     global logger
     if args.log_file is not None:
         logger = get_logger('flow.index', args.log_file)

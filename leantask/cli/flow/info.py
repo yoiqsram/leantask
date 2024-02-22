@@ -1,10 +1,10 @@
 import argparse
 import sys
-from argparse import Namespace
 from typing import Callable, List
 
-from ...database import FlowModel, FlowRunModel, FlowScheduleModel
+from ...database import FlowRunModel, FlowScheduleModel
 from ...enum import FlowRunStatus
+from ...flow import Flow
 from ...utils.string import quote
 
 
@@ -23,15 +23,14 @@ def add_info_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-    parser.add_argument(
-        '--log-file',
-        help=argparse.SUPPRESS
-    )
 
     return show_info
 
 
-def show_info(args: Namespace, flow) -> None:
+def show_info(
+        args: argparse.Namespace,
+        flow: Flow
+    ) -> None:
     # Show flow name and description
     print(flow.name)
     print(' ' * 3, flow.description)
@@ -60,17 +59,11 @@ def show_info(args: Namespace, flow) -> None:
         return
 
     # Show run statistics
+    
     flow_run_models: List[FlowRunModel] = list(
-        FlowRunModel
-        .select(
-            FlowRunModel.status,
-            FlowRunModel.created_datetime,
-            FlowRunModel.modified_datetime
-        )
-        .join(FlowModel)
+        flow._model.flow_runs
         .where(
-            (FlowModel.id == flow.id)
-            & FlowRunModel.status.in_([
+            FlowRunModel.status.in_([
                 FlowRunStatus.DONE.name,
                 FlowRunStatus.FAILED.name
             ])
@@ -111,7 +104,7 @@ def show_info(args: Namespace, flow) -> None:
         if len(failed_flow_run_models) > 0:
             print(
                 len(failed_flow_run_models),
-                f" (latest run: {failed_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
+                f" (latest run at {failed_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
             )
         else:
             print(0)
@@ -125,7 +118,7 @@ def show_info(args: Namespace, flow) -> None:
         if len(running_flow_run_models) > 0:
             print(
                 len(running_flow_run_models),
-                f" (latest run: {running_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
+                f" (latest run at {running_flow_run_models[-1].created_datetime.isoformat(sep=' ')})"
             )
         else:
             print(0)
@@ -142,15 +135,11 @@ def show_info(args: Namespace, flow) -> None:
         print('No run history.')
 
     # Show flow schedules
-    flow_schedule_models: List[FlowScheduleModel] = list(
-        FlowScheduleModel.select()
-        .join(FlowModel)
-        .where(FlowModel.id == flow.id)
-    )
+    flow_schedule_models: List[FlowScheduleModel] = list(flow._model.flow_schedules)
     print()
     if len(flow_schedule_models) > 0:
         max_items = 10
-        print(f'Scheduled run datetime ({len(flow_schedule_models)}):')
+        print(f'Scheduled run datetime - {len(flow_schedule_models)} schedule(s):')
         for i, flow_schedule_model in enumerate(flow_schedule_models):
             if i == max_items:
                 print(' ' * 3, '- etc')

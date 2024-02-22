@@ -1,11 +1,11 @@
 import argparse
-from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 import subprocess
 from typing import Callable, List, Tuple
 
 from ...context import GlobalContext
+from ...flow import Flow
 from ...utils.path import get_file_created_datetime
 
 
@@ -21,12 +21,12 @@ def add_logs_parser(subparsers) -> Callable:
         help='log options'
     )
 
-    list_option: argparse.ArgumentParser = option.add_parser(
+    list_option = option.add_parser(
         'list',
         help='Show list of log files from the latest runs.'
     )
     list_option.add_argument(
-        '--max', '-M',
+        '--limit', '-l',
         default=10,
         type=int,
         help='Maximum number of logs to be shown.'
@@ -41,7 +41,7 @@ def add_logs_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
 
-    inspect_option: argparse.ArgumentParser = option.add_parser(
+    inspect_option = option.add_parser(
         'inspect',
         help='Show list of log files from the latest runs.'
     )
@@ -59,7 +59,10 @@ def add_logs_parser(subparsers) -> Callable:
     return show_logs
 
 
-def show_logs(args: Namespace, flow) -> None:
+def show_logs(
+        args: argparse.Namespace,
+        flow: Flow
+    ) -> None:
     log_dir = GlobalContext.log_dir() / 'flow_runs' / str(flow.id)
     log_file_paths = {
         get_file_created_datetime(log_file_path): log_file_path
@@ -82,7 +85,7 @@ def show_logs(args: Namespace, flow) -> None:
     if args.option == 'list':
         show_log_list(
             log_file_paths_sorted,
-            max=args.max,
+            limit=args.limit,
             full=args.full
         )
 
@@ -95,7 +98,7 @@ def show_logs(args: Namespace, flow) -> None:
 
 def show_log_list(
         log_file_paths_sorted: List[Tuple[datetime, Path]],
-        max: int,
+        limit: int,
         full: bool
     ) -> None:
     log_file_path_count = len(log_file_paths_sorted)
@@ -105,9 +108,9 @@ def show_log_list(
 
     print(
         f'Found {log_file_path_count} run logs.'
-        + (' Show the last {max} logs.' if log_file_path_count > max else '')
+        + (' Show the last {max} logs.' if log_file_path_count > limit else '')
     )
-    for created_datetime, log_file_path in log_file_paths_sorted[:max]:
+    for created_datetime, log_file_path in log_file_paths_sorted[:limit]:
         if not full:
             log_file_path = GlobalContext.relative_path(log_file_path)
 

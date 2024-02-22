@@ -58,7 +58,10 @@ def add_run_parser(subparsers) -> Callable:
     return run_flow
 
 
-def run_flow(args: argparse.Namespace, flow: Flow) -> None:
+def run_flow(
+        args: argparse.Namespace,
+        flow: Flow
+    ) -> None:
     global logger
     if args.log_file is not None:
         logger = get_logger('flow.run', args.log_file)

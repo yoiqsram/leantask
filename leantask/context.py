@@ -17,22 +17,25 @@ def _prepare_log_file(file_path: Path):
 
 
 class GlobalContext:
-    PROJECT_DIR: Path = Path(os.getcwd()).resolve()
-    WORKFLOWS_DIRNAME: str = None
+    PROJECT_DIR: Path = os.environ.get('PROJECT_DIR', Path(os.getcwd()).resolve())
+    FLOWS_DIRNAME: str = os.environ.get('FLOWS_DIRNAME')
     CACHE_DIRNAME: str = '__cache__'
     LOG_DIRNAME: str = 'log'
 
-    DATABASE_NAME: str = 'leantask.db'
-    LOG_DATABASE_NAME: str = 'leantask_log.db'
+    DATABASE_NAME: str = os.environ.get('DATABASE_NAME', 'leantask.db')
+    LOG_DATABASE_NAME: str = os.environ.get('LOG_DATABASE_NAME', 'leantask_log.db')
 
-    LOG_DEBUG: bool = False
-    LOG_QUIET: bool = False
-    DEBUG_QUERY: bool = False
+    LOG_DEBUG: bool = os.environ.get('LOG_DEBUG') == 'True'
+    LOG_QUIET: bool = os.environ.get('LOG_QUIET') == 'True'
+    DEBUG_QUERY: bool = os.environ.get('DEBUG_QUERY') == 'True'
 
-    SCHEDULER_SESSION_ID: str = None
-    CACHE_TIMEOUT: int = 1800
+    try:
+        CACHE_TIMEOUT: int = int(os.environ.get('CACHE_TIMEOUT'))
+    except TypeError:
+        CACHE_TIMEOUT: int = 1800
 
     LOCAL_RUN: bool = False
+    SCHEDULER_SESSION_ID: str = None
 
     @classmethod
     def set_project_dir(cls, value: Path) -> None:
@@ -63,10 +66,10 @@ class GlobalContext:
 
     @classmethod
     def workflows_dir(cls) -> Path:
-        if cls.WORKFLOWS_DIRNAME is None:
+        if cls.FLOWS_DIRNAME is None:
             workflows_dir_path = cls.PROJECT_DIR
         else:
-            workflows_dir_path = cls.PROJECT_DIR / cls.WORKFLOWS_DIRNAME
+            workflows_dir_path = cls.PROJECT_DIR / cls.FLOWS_DIRNAME
 
         if not workflows_dir_path.is_dir():
             workflows_dir_path.mkdir(parents=True)

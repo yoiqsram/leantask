@@ -6,6 +6,8 @@ from ...database import FlowRunModel, TaskRunModel
 from ...enum import FlowRunStatus, TaskRunStatus
 from ...flow import Flow
 
+LIMIT = 10
+
 
 def add_runs_parser(subparsers) -> Callable:
     parser: argparse.ArgumentParser = subparsers.add_parser(
@@ -15,7 +17,6 @@ def add_runs_parser(subparsers) -> Callable:
     )
     option = parser.add_subparsers(
         dest='option',
-        required=True,
         help='runs options'
     )
 
@@ -25,7 +26,7 @@ def add_runs_parser(subparsers) -> Callable:
     )
     list_option.add_argument(
         '--limit', '-l',
-        default=10,
+        default=LIMIT,
         type=int,
         help='Maximum number of runs info to be shown.'
     )
@@ -63,22 +64,7 @@ def show_runs(
         args: argparse.Namespace,
         flow: Flow
     ) -> None:
-    if args.option == 'list':
-        flow_run_models: List[FlowRunModel] = list(
-            flow._model.flow_runs
-            .order_by(FlowRunModel.modified_datetime.desc())
-            .limit(args.limit)
-        )
-
-        if len(flow_run_models) == 0:
-            print('No run history.')
-            return
-
-        for flow_run_model in flow_run_models:
-            show_flow_run_info(flow, flow_run_model)
-            print()
-
-    elif args.option == 'search':
+    if args.option == 'search':
         if args.by_datetime:
             schedule_datetime = datetime.fromisoformat(args.keyword)
             flow_run_models = list(
@@ -117,6 +103,23 @@ def show_runs(
             task_info=True
         )
 
+    else:
+        limit = args.limit if hasattr(args, 'limit') else LIMIT
+
+        flow_run_models: List[FlowRunModel] = list(
+            flow._model.flow_runs
+            .order_by(FlowRunModel.modified_datetime.desc())
+            .limit(limit)
+        )
+
+        if len(flow_run_models) == 0:
+            print('No run history.')
+            return
+
+        for flow_run_model in flow_run_models:
+            show_flow_run_info(flow, flow_run_model)
+            print()
+
 
 def show_flow_run_info(
         flow: Flow,
@@ -151,6 +154,10 @@ def show_flow_run_info(
         + (
             f"  ({str(flow_run_model.flow_schedule_id).split('-')[0]}...)"
             if flow_run_model.flow_schedule_id is not None
+                and flow_run_model.status in (
+                    FlowRunStatus.SCHEDULED.name,
+                    FlowRunStatus.SCHEDULED_BY_USER.name
+                )
             else ''
         )
     )

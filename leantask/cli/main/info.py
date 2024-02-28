@@ -8,17 +8,17 @@ def add_info_parser(subparsers) -> Callable:
         help='Show info about leantask project.',
         description='Show info about leantask project.'
     )
-    options_subparser = parser.add_subparsers(
-        dest='options',
-        help='Options to show. Default to show project info.',
+    option_subparser = parser.add_subparsers(
+        dest='option',
+        help='Option to show. Default to show project info.',
         description='Options to show. Default to show project info.',
     )
 
-    options_subparser.add_parser(
+    option_subparser.add_parser(
         'project',
         help='Show project info.'
     )
-    options_subparser.add_parser(
+    option_subparser.add_parser(
         'flows',
         help='Show flow info.'
     )
@@ -27,7 +27,7 @@ def add_info_parser(subparsers) -> Callable:
 
 
 def show_info(args: argparse.Namespace):
-    if args.options == 'flows':
+    if args.option == 'flows':
         show_flow_info()
     else:
         show_project_info()

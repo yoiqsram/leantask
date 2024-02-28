@@ -123,8 +123,11 @@ def get_unfinished_flow_run_models():
     )
     for flow_schedule_model in flow_schedule_models:
         scheduled_flow_run_models = list(
-            flow_schedule_model.flow_runs
-            .where(FlowRunModel.status.in_(unfinished_flow_run_status))
+            FlowRunModel.select()
+            .where(
+                (FlowRunModel.flow_schedule_id == flow_schedule_model.id)
+                & FlowRunModel.status.in_(unfinished_flow_run_status)
+            )
         )
 
         if len(scheduled_flow_run_models) == 0:

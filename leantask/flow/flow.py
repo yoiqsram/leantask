@@ -412,13 +412,17 @@ class FlowRun(ModelMixin):
         self.logger.info(f"Flow run status: '{self.status.name}'.")
 
         self.logger.debug('Delete schedule if exists.')
-        flow_schedule_model = (
-            FlowScheduleModel.select()
-            .where(FlowScheduleModel.id == self.flow_schedule_id)
-            .limit(1)
-            [0]
-        )
-        flow_schedule_model.delete_instance()
+        if self.flow_schedule_id is not None:
+            try:
+                flow_schedule_model = (
+                    FlowScheduleModel.select()
+                    .where(FlowScheduleModel.id == self.flow_schedule_id)
+                    .limit(1)
+                    [0]
+                )
+                flow_schedule_model.delete_instance()
+            except IndexError:
+                pass
 
         return self._status
 

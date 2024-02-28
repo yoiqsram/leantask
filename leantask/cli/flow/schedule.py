@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 from typing import Callable
 
 from ...context import GlobalContext
-from ...database import FlowScheduleModel
+from ...database import FlowScheduleModel, FlowRunModel
 from ...enum import FlowRunStatus, FlowScheduleStatus, TaskRunStatus
-from ...flow import Flow, FlowRun, TaskRun
+from ...flow import Flow, FlowRun
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
 
@@ -140,7 +140,8 @@ def update_schedule(
 
         try:
             flow_run_model = (
-                flow_schedule_model.flow_runs
+                FlowRunModel.select()
+                .where(FlowRunModel.flow_schedule_id == flow_schedule_model.id)
                 .limit(1)
                 [0]
             )
@@ -159,7 +160,7 @@ def update_schedule(
                     + (' by scheduler'
                         if flow_run_model.status == FlowRunStatus.SCHEDULED.name
                         else ' manually')
-                    + ' at'
+                    + ' at '
                     + repr(flow_run_model.schedule_datetime.isoformat(sep=' ', timespec='minutes'))
                     + ' and currently running. New schedule can only be set when it finish.'
                 )
@@ -171,7 +172,7 @@ def update_schedule(
                     + (' by scheduler'
                         if flow_run_model.status == FlowRunStatus.SCHEDULED.name
                         else ' manually')
-                    + ' at'
+                    + ' at '
                     + repr(flow_run_model.schedule_datetime.isoformat(sep=' ', timespec='minutes'))
                     + f' and currently running. '
                     + f'New schedule can only be set after passing its max delay of {flow_run_model.max_delay}s.'

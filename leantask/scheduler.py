@@ -12,7 +12,6 @@ from .database import FlowModel, FlowRunModel, FlowScheduleModel, SchedulerSessi
 from .discover import index_all_flows
 from .enum import FlowIndexStatus, FlowRunStatus, FlowScheduleStatus
 from .logging import get_logger
-from .utils.cache import save_cache, clear_cache
 from .utils.script import has_sudo_access, sync_server_time
 from .utils.string import generate_uuid, obj_repr, quote
 
@@ -21,21 +20,14 @@ logger = None
 
 def execute_flow(
         flow_run_model: FlowRunModel,
-        log_file_path: Path,
         debug: bool = False
     ) -> FlowRunStatus:
-    cache_key = save_cache({
-        'flow_model': flow_run_model.flow,
-        'flow_run_model': flow_run_model
-    })
-
     run_command = ' '.join((
         quote(sys.executable),
         quote(Path(flow_run_model.flow.path).resolve()),
         'run',
+        '--run-id', str(flow_run_model.id),
         '--project-dir', quote(GlobalContext.PROJECT_DIR),
-        '--cache', cache_key,
-        '--log-file', quote(log_file_path),
         '--scheduler-session-id', GlobalContext.SCHEDULER_SESSION_ID,
         '--debug' if debug else ''
     ))
@@ -49,7 +41,6 @@ def execute_flow(
             stderr=subprocess.PIPE
         )
         flow_run_status = FlowRunStatus(run_process.returncode)
-        clear_cache(cache_key)
 
     except Exception as exc:
         logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
@@ -97,7 +88,6 @@ def execute_and_reschedule_flow(
     ) -> Tuple[FlowRunStatus, FlowScheduleStatus]:
     flow_run_status = execute_flow(
         flow_run_model,
-        log_file_path=log_file_path,
         debug=debug
     )
     flow_schedule_status = schedule_flow(
@@ -163,13 +153,13 @@ def get_unfinished_flow_run_models():
 class Scheduler:
     def __init__(
             self,
-            worker: int = 1,
-            heartbeat: int = 30,
+            worker: int = None,
+            heartbeat: int = None,
             debug: bool = False
         ) -> None:
         self.id = generate_uuid()
-        self.heartbeat = heartbeat
-        self.worker = worker
+        self.heartbeat = heartbeat if heartbeat is not None else GlobalContext.HEARTBEAT
+        self.worker = worker if worker is not None else GlobalContext.WORKER
         self.log_path = GlobalContext.get_scheduler_session_log_file_path()
 
         global logger
@@ -229,6 +219,9 @@ class Scheduler:
             )
 
         for flow_run_model in get_unfinished_flow_run_models():
+            flow_run_model.status = FlowRunStatus.PENDING.name
+            flow_run_model.save()
+
             if executor is not None:
                 logger.info(f"Submit flow run of '{flow_run_model.flow.path}' to the executor.")
                 executor.submit(
@@ -257,11 +250,20 @@ class Scheduler:
                 debug=self.debug
             )
 
-        with futures.ThreadPoolExecutor(max_workers=self.worker) as executor:
+        if self.worker > 0:
+            with futures.ThreadPoolExecutor(max_workers=self.worker) as executor:
+                while True:
+                    logger.info('ALIVE')
+                    delay_task = asyncio.create_task(asyncio.sleep(self.heartbeat))
+                    routine_task = asyncio.create_task(self.run_routine(executor))
+                    await routine_task
+                    await delay_task
+
+        else:
             while True:
                 logger.info('ALIVE')
                 delay_task = asyncio.create_task(asyncio.sleep(self.heartbeat))
-                routine_task = asyncio.create_task(self.run_routine(executor))
+                routine_task = asyncio.create_task(self.run_routine())
                 await routine_task
                 await delay_task
 

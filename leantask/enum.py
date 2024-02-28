@@ -47,10 +47,13 @@ class FlowRunStatus(UnknownEnumMixin, Enum):
     SCHEDULED_BY_USER = 11
     '''The flow has been scheduled manually by user.'''
 
-    CANCELED = 12
+    PENDING = 12
+    '''The flow is waiting to be executed.'''
+
+    CANCELED = 13
     '''The flow has been scheduled and waiting to run, but it's set to inactive thus schedule is canceled.'''
 
-    CANCELED_BY_USER = 13
+    CANCELED_BY_USER = 14
     '''The flow has been scheduled and waiting to run, but user has cancel the run thus schedule is canceled.'''
 
     RUNNING = 20
@@ -76,7 +79,7 @@ class TaskRunStatus(UnknownEnumMixin, Enum):
     '''The task has been scheduled.'''
 
     PENDING = 11
-    '''The task has been scheduled and is waiting to be executed.'''
+    '''The task is waiting to be executed.'''
 
     CANCELED = 12
     '''The flow, task parent, has been canceled while waiting to run thus it's canceled.'''

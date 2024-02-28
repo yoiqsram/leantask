@@ -11,11 +11,13 @@ def add_scheduler_parser(subparsers) -> Callable:
     parser.add_argument(
         '--worker', '-W',
         default=1,
+        type=int,
         help='Number of worker.'
     )
     parser.add_argument(
         '--heartbeat', '-H',
         default=30,
+        type=int,
         help='Heartbeat interval.'
     )
     parser.add_argument(

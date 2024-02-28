@@ -119,7 +119,7 @@ def show_logs(
         return edit_log(*log_file_paths_sorted[-args.last])
 
 
-def get_all_log_file_paths_sorted(log_dir: Path):
+def get_all_log_file_paths_sorted(log_dir: Path) -> List[Tuple[datetime, Path]]:
     log_file_paths = {
         get_file_created_datetime(log_file_path): log_file_path
         for log_file_path in log_dir.rglob('*.log')
@@ -139,6 +139,8 @@ def get_all_log_file_paths_sorted(log_dir: Path):
             created_datetime
         ))
 
+    return log_file_paths_sorted
+
 
 def show_log_list(
         log_file_paths_sorted: List[Tuple[datetime, Path]],
@@ -154,7 +156,7 @@ def show_log_list(
         f'Found {log_file_path_count} run logs.'
         + (' Show the last {max} logs.' if log_file_path_count > limit else '')
     )
-    for created_datetime, log_file_path in log_file_paths_sorted[:limit]:
+    for log_file_path, created_datetime in log_file_paths_sorted[:limit]:
         if not full:
             log_file_path = GlobalContext.relative_path(log_file_path)
 

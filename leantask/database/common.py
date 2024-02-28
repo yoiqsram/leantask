@@ -10,6 +10,7 @@ from peewee import (
 )
 
 from ..context import GlobalContext
+from ..utils.string import generate_uuid
 
 MD5_CHAR_LENGTH = 32
 UUID_CHAR_LENGTH = 36
@@ -71,15 +72,15 @@ def column_md5_string(**kwargs) -> Field:
 
 
 def column_uuid_string(**kwargs) -> Field:
-    return UUIDField(**kwargs)
+    return FixedCharField(max_length=36, **kwargs)
 
 
 def column_uuid_primary_key(**kwargs) -> Field:
-    return column_uuid_string(primary_key=True, default=uuid.uuid4, **kwargs)
+    return column_uuid_string(primary_key=True, default=generate_uuid, **kwargs)
 
 
 def column_scheduler_session_id(**kwargs) -> Field:
-    return UUIDField(
+    return column_uuid_string(
         default=lambda: GlobalContext.SCHEDULER_SESSION_ID,
         **kwargs
     )

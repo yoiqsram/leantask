@@ -180,6 +180,7 @@ class Flow(ModelMixin):
             if flow_run.status in (
                     FlowRunStatus.SCHEDULED,
                     FlowRunStatus.SCHEDULED_BY_USER,
+                    FlowRunStatus.PENDING
                 ):
                 flow_run.status = FlowRunStatus.RUNNING
 
@@ -222,7 +223,8 @@ class Flow(ModelMixin):
                     log_model.save(force_insert=True)
 
     def index(self) -> FlowIndexStatus:
-        if self._model_exists and self._model.checksum == self.checksum:
+        self._checksum = calculate_md5(self.path)
+        if self._model_exists and self._model.checksum == self._checksum:
             return FlowIndexStatus.UNCHANGED
 
         self.save()

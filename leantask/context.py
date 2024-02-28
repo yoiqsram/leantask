@@ -30,12 +30,22 @@ class GlobalContext:
     DEBUG_QUERY: bool = os.environ.get('DEBUG_QUERY') == 'True'
 
     try:
-        CACHE_TIMEOUT: int = int(os.environ.get('CACHE_TIMEOUT'))
+        CACHE_TIMEOUT = int(os.environ.get('CACHE_TIMEOUT'))
     except TypeError:
-        CACHE_TIMEOUT: int = 1800
+        CACHE_TIMEOUT = 1800
 
     LOCAL_RUN: bool = False
     SCHEDULER_SESSION_ID: str = None
+
+    try:
+        WORKER = int(os.environ.get('WORKER'))
+    except TypeError:
+        WORKER = 1
+
+    try:
+        HEARTBEAT = int(os.environ.get('HEARTBEAT'))
+    except TypeError:
+        HEARTBEAT = 30
 
     @classmethod
     def set_project_dir(cls, value: Path) -> None:

@@ -58,7 +58,7 @@ def index_flow(
     GlobalContext.SCHEDULER_SESSION_ID = args.scheduler_session_id
 
     try:
-        index_status: FlowIndexStatus = flow.index()
+        index_status = flow.index()
         logger.info(f'Flow index status: {index_status.name}')
         raise SystemExit(index_status.value)
 

@@ -19,7 +19,7 @@ def add_info_parser(subparsers) -> Callable:
         help='Show project info.'
     )
     options_subparser.add_parser(
-        'flow',
+        'flows',
         help='Show flow info.'
     )
 
@@ -27,7 +27,7 @@ def add_info_parser(subparsers) -> Callable:
 
 
 def show_info(args: argparse.Namespace):
-    if args.options == 'flow':
+    if args.options == 'flows':
         show_flow_info()
     else:
         show_project_info()
@@ -52,7 +52,7 @@ def show_flow_info() -> None:
     for flow_model in flow_models:
         print(
             ( '[Disabled]  ' if not flow_model.active else '' )
-            + f"{flow_model.name}  {str(flow_model.id).split('-')[0]}..."
+            + f"{flow_model.name}  {str(flow_model).split('-')[0]}..."
         )
 
         print(

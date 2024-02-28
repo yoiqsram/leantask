@@ -8,7 +8,11 @@ from time import sleep
 from typing import List, Set, Union
 
 from ..context import GlobalContext
-from ..database import FlowModel, FlowRunModel, database
+from ..database import (
+    FlowModel, FlowRunModel, FlowScheduleModel,
+    TaskDownstreamModel, TaskDownstreamLogModel,
+    database
+)
 from ..enum import FlowIndexStatus, FlowRunStatus, TaskRunStatus
 from ..logging import get_flow_run_logger
 from ..utils.script import calculate_md5
@@ -44,7 +48,10 @@ class Flow(ModelMixin):
         self.max_delay = max_delay
         self.active = active
 
+        self._start_datetime = start_datetime
+        self._end_datetime = end_datetime
         if cron_schedules is not None:
+            self._cron_schedules = ','.join(cron_schedules)
             self._schedule = Schedule(cron_schedules, start_datetime, end_datetime)
         else:
             self._schedule = None
@@ -59,7 +66,11 @@ class Flow(ModelMixin):
         self._tasks: Set[Task] = set()
         self._runs: List[FlowRun] = []
 
-        super(Flow, self).__init__(flow_id, path=self._path, name=self.name)
+        super(Flow, self).__init__(
+            flow_id,
+            path=self._path,
+            name=self.name
+        )
 
     @property
     def name(self) -> str:
@@ -76,21 +87,15 @@ class Flow(ModelMixin):
 
     @property
     def cron_schedules(self) -> Union[str, None]:
-        if self._schedule is None:
-            return None
-        return ','.join(self._schedule.cron_schedules)
+        return self._cron_schedules
 
     @property
     def start_datetime(self) -> Union[datetime, None]:
-        if self._schedule is None:
-            return None
-        return self._schedule.start_datetime
+        return self._start_datetime
 
     @property
     def end_datetime(self) -> Union[datetime, None]:
-        if self._schedule is None:
-            return None
-        return self._schedule.end_datetime
+        return self._end_datetime
 
     @property
     def checksum(self) -> str:
@@ -108,38 +113,35 @@ class Flow(ModelMixin):
     def runs(self) -> List[FlowRun]:
         return self._runs
 
-    def _setup_existing_model(
+    def _setup_model_from_fields(
             self,
-            __id: str = None,
-            path: str = None,
+            path: Path = None,
             name: str = None
         ) -> None:
-        if __id is not None:
+        if path is not None:
             try:
                 self._model = (
                     self.__model__.select()
-                    .where(self.__model__.id == __id)
+                    .where(self.__model__.path == path)
                     .limit(1)
                     [0]
                 )
-
                 self._model_exists = True
+                return
 
             except IndexError:
                 pass
 
-        elif path is not None and name is not None:
+        if name is not None:
             try:
                 self._model = (
                     self.__model__.select()
-                    .where(
-                        (self.__model__.path == path)
-                        & (self.__model__.name == name)
-                    )
+                    .where(self.__model__.name == name)
                     .limit(1)
                     [0]
                 )
                 self._model_exists = True
+                return
 
             except IndexError:
                 pass
@@ -167,10 +169,11 @@ class Flow(ModelMixin):
         if len(self.runs) == 0 \
                 or self.runs[-1].status in (
                     FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
-                    FlowRunStatus.DONE, FlowRunStatus.FAILED
+                    FlowRunStatus.DONE, FlowRunStatus.FAILED,
+                    FlowRunStatus.FAILED_TIMEOUT_DELAY, FlowRunStatus.FAILED_TIMEOUT_RUN
                 ):
             flow_run = FlowRun(self, status=FlowRunStatus.RUNNING)
-            flow_run.create_all_task_runs()
+            flow_run.create_task_runs()
 
         else:
             flow_run = self.runs[-1]
@@ -202,6 +205,21 @@ class Flow(ModelMixin):
 
             for task in self.tasks:
                 task.save()
+
+                for downstream_task in task.downstreams:
+                    model = TaskDownstreamModel(
+                        task=task.id,
+                        downstream_task=downstream_task.id
+                    )
+                    model.save()
+
+                    log_model = TaskDownstreamLogModel(
+                        ref_id=model.id,
+                        ref_task=task.id,
+                        ref_downstream_task=downstream_task.id,
+                        created_datetime=task._model.created_datetime
+                    )
+                    log_model.save(force_insert=True)
 
     def index(self) -> FlowIndexStatus:
         if self._model_exists and self._model.checksum == self.checksum:
@@ -237,28 +255,38 @@ class FlowRun(ModelMixin):
     def __init__(
             self,
             flow: Flow,
-            max_delay: int = None,
-            is_manual: bool = True,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
+            is_manual: bool = None,
             run_id: str = None,
             schedule_id: str = None,
             schedule_datetime: datetime = None
         ) -> None:
-        self.max_delay = max_delay if max_delay is not None else flow.max_delay
-        self.is_manual = is_manual
+        self.flow = flow
         self.flow_schedule_id = schedule_id
         self.schedule_datetime = schedule_datetime
+        self.is_manual = is_manual if is_manual is not None else True
+        self.max_delay = self.flow.max_delay
 
-        self.flow = flow
         self.created_datetime = datetime.now()
         self.modified_datetime = self.created_datetime
+        self.started_datetime: datetime = None
 
-        self._task_runs_sorted: OrderedDict[Task, TaskRun] = OrderedDict()
-        self._status = status
+        self._task_runs: OrderedDict[Task, TaskRun] = OrderedDict()
+        self._status = FlowRunStatus.UNKNOWN
 
         super(FlowRun, self).__init__(run_id)
 
+        self.flow.add_run(self)
+
         self.logger = get_flow_run_logger(self.flow.id, self.id)
+
+        if not self._model_exists:
+            self.logger.debug(f"Set initial status for flow run to '{status.name}'.")
+            self.status = status
+
+        else:
+            self._status = getattr(FlowRunStatus, self._status)
+            self.flow_schedule_id = self._model.flow_schedule_id
 
     @property
     def flow_id(self) -> str:
@@ -270,7 +298,7 @@ class FlowRun(ModelMixin):
 
     @property
     def task_runs_sorted(self) -> OrderedDict[Task, TaskRun]:
-        return self._task_runs_sorted
+        return self._task_runs
 
     @property
     def status(self) -> FlowRunStatus:
@@ -292,20 +320,18 @@ class FlowRun(ModelMixin):
                 f"'{self._status.name}' to '{value.name}'."
             )
 
+        self.logger.debug(f"Set flow run status from '{self._status.name}' to '{value.name}'.")
         self._status = value
         self._model.status = self._status
         self.modified_datetime = datetime.now()
         self._model.modified_datetime = self.modified_datetime
-        if value == FlowRunStatus.RUNNING:
-            self._model.started_datetime = self.modified_datetime
+        if self._status == FlowRunStatus.RUNNING:
+            self.started_datetime = self.modified_datetime
+            self._model.started_datetime = self.started_datetime
         self.save()
 
-        if self._status in (
-                FlowRunStatus.SCHEDULED,
-                FlowRunStatus.SCHEDULED_BY_USER,
-                FlowRunStatus.RUNNING
-            ):
-            for task_run in self.task_runs_sorted:
+        if self._status == FlowRunStatus.RUNNING:
+            for task_run in self.task_runs_sorted.values():
                 if task_run.status != TaskRunStatus.PENDING:
                     task_run.status = TaskRunStatus.PENDING
 
@@ -314,48 +340,48 @@ class FlowRun(ModelMixin):
                 FlowRunStatus.CANCELED_BY_USER
             ):
             for _, task_run in self._task_runs.values():
-                if task_run.status == TaskRunStatus.PENDING:
+                if task_run.status in (
+                        TaskRunStatus.SCHEDULED,
+                        TaskRunStatus.PENDING
+                    ):
                     task_run.status = TaskRunStatus.CANCELED
-
-    @property
-    def started_datetime(self) -> datetime:
-        return self._model.started_datetime
 
     def add_task_run(self, task_run: TaskRun) -> None:
         if not isinstance(task_run, TaskRun):
             raise TypeError()
 
-        self._task_runs_sorted[task_run.task] = task_run
+        self._task_runs[task_run.task] = task_run
 
-    def execute(self):
+    def execute(self) -> FlowRunStatus:
         self.logger.info(f"Run flow '{self.flow.name}'.")
 
         has_failed = False
-        task_run_sorted = self._task_runs_sorted.values()
-        if len(task_run_sorted) == 0:
+        task_runs = self._task_runs.values()
+        if len(task_runs) == 0:
             has_failed = True
             self.logger.error('No task run was found.')
 
-        for task_run in self._task_runs_sorted.values():
+        for task_run in self._task_runs.values():
             self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
 
-            if task_run.status != TaskRunStatus.PENDING:
+            if task_run.status not in (
+                    TaskRunStatus.SCHEDULED,
+                    TaskRunStatus.PENDING
+                ):
                 self.logger.debug(
-                    f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}' not '{TaskRunStatus.PENDING.name}',"
+                    f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}'"
                     f" thus it will not be run."
                 )
                 continue
 
             while True:
-                self.logger.debug(f"Execute task '{task_run.task.name}' on {task_run.attempt + 1} attempt(s).")
                 task_run.execute()
 
                 if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
-                    self.logger.debug(f"Task '{task_run.task.name}' has been flagged as '{task_run.status.name}'.")
                     break
 
                 if task_run.attempt > task_run.retry_max:
-                    self.logger.debug(
+                    self.logger.info(
                         f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
                         f" and reaching the maximum attempt of {task_run.retry_max}."
                     )
@@ -386,29 +412,44 @@ class FlowRun(ModelMixin):
         self.logger.info(f"Flow run status: '{self.status.name}'.")
 
         self.logger.debug('Delete schedule if exists.')
-        if self._model.flow_schedule is not None:
-            self._model.flow_schedule.delete_instance()
+        flow_schedule_model = (
+            FlowScheduleModel.select()
+            .where(FlowScheduleModel.id == self.flow_schedule_id)
+            .limit(1)
+            [0]
+        )
+        flow_schedule_model.delete_instance()
+
+        return self._status
 
     def total_seconds(self) -> Union[float, None]:
         if self._status in (
                 FlowRunStatus.DONE,
-                FlowRunStatus.FAILED
+                FlowRunStatus.FAILED,
+                FlowRunStatus.FAILED_TIMEOUT_DELAY,
+                FlowRunStatus.FAILED_TIMEOUT_RUN
             ):
             return (self.modified_datetime - self.started_datetime).total_seconds()
 
-    def create_all_task_runs(self):
+    def create_task_runs(
+            self,
+            status: TaskRunStatus = TaskRunStatus.PENDING
+        ) -> None:
+        task_run_ids = dict()
+        if self._model_exists:
+            task_run_ids = {
+                model.task.id: model.id
+                for model in self._model.task_runs
+            }
+
         for task in self.flow.tasks_sorted:
-            task_run = TaskRun(
+            TaskRun(
                 self,
                 task=task,
                 attempt=1,
-                retry_max=task.retry_max,
-                retry_delay=task.retry_delay
+                status=status,
+                run_id=task_run_ids.get(task.id)
             )
-            self._task_runs_sorted[task] = task_run
-
-    def get_task_run(self, task: Task) -> TaskRun:
-        return self._task_runs[task]
 
     def __repr__(self) -> str:
         return obj_repr(self, 'flow_id', 'flow_name', 'status')

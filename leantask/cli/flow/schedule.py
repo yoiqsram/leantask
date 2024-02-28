@@ -234,8 +234,6 @@ def create_new_flow_run(
         schedule_id=flow_schedule_model.id,
         schedule_datetime=flow_schedule_model.schedule_datetime
     )
-    for task in flow.tasks:
-        task_run = TaskRun(flow_run, task)
-        flow_run.add_task_run(task_run)
+    flow_run.create_task_runs(TaskRunStatus.SCHEDULED)
 
     flow_run.save()

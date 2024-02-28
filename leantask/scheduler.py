@@ -144,7 +144,7 @@ def get_unfinished_flow_run_models():
     unscheduled_flow_run_models = list(
         FlowRunModel.select()
         .where(
-            (FlowRunModel.flow_schedule >> None)
+            (FlowRunModel.flow_schedule_id >> None)
             & FlowRunModel.status.in_(unfinished_flow_run_status)
         )
     )

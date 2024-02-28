@@ -1,10 +1,10 @@
 from ...enum import TableName
 from ..base import BaseModel
 from ..common import (
-    ForeignKeyField, SQL,
+    ForeignKeyField,
     column_boolean, column_integer,
     column_small_string, column_medium_string, column_big_string, column_text,
-    column_md5_string, column_uuid_primary_key,
+    column_md5_string, column_uuid_string, column_uuid_primary_key,
     column_datetime, column_current_datetime, column_modified_datetime
 )
 from ..log_models import FlowLogModel, FlowRunLogModel
@@ -59,13 +59,7 @@ class FlowRunModel(BaseModel):
     is_manual = column_boolean(default=False)
     status = column_small_string()
 
-    flow_schedule = ForeignKeyField(
-        FlowScheduleModel,
-        backref='flow_runs',
-        on_delete='CASCADE',
-        unique=True,
-        null=True
-    )
+    flow_schedule_id = column_uuid_string(null=True)
 
     created_datetime = column_current_datetime()
     modified_datetime = column_modified_datetime()

@@ -19,27 +19,22 @@ class ModelMixin:
         self._model = None
         self._model_exists = False
 
-        self._setup_existing_model(__id, **kwargs)
+        self._setup_model_from_id(__id)
 
         if self._model is None:
-            kwargs = dict()
-            for key, field in self.__model__._meta.fields.items():
-                if not hasattr(self, key) or key == 'id':
-                    continue
+            self._setup_model_from_fields(**kwargs)
 
-                if isinstance(field, ForeignKeyField):
-                    key += '_id'
+        if self._model is None:
+            self._setup_model_new()
 
-                value = getattr(self, key)
-                kwargs[key] = value if not isinstance(value, Enum) else value.name
-
-            self._model = self.__model__(**kwargs)
+        if self._model_exists:
+            self._set_attributes_from_model()
 
     @property
     def id(self) -> str:
         return self._model.id
 
-    def _setup_existing_model(self, __id: str = None) -> None:
+    def _setup_model_from_id(self, __id: str = None) -> None:
         if __id is not None:
             try:
                 self._model = (
@@ -48,11 +43,40 @@ class ModelMixin:
                     .limit(1)
                     [0]
                 )
-
                 self._model_exists = True
 
             except IndexError:
                 pass
+
+    def _setup_model_from_fields(self, **kwargs) -> None:
+        pass
+
+    def _setup_model_new(self) -> None:
+        kwargs = dict()
+        for key, field in self.__model__._meta.fields.items():
+            if not hasattr(self, key) or key == 'id':
+                continue
+
+            if isinstance(field, ForeignKeyField):
+                key += '_id'
+
+            value = getattr(self, key)
+            kwargs[key] = value if not isinstance(value, Enum) else value.name
+
+        self._model = self.__model__(**kwargs)
+
+    def _set_attributes_from_model(self) -> None:
+        for key, field in self._model._meta.fields.items():
+            if not hasattr(self, key) \
+                    or key == 'id' \
+                    or key in self.__class__.__refs__:
+                continue
+
+            value = getattr(self._model, key)
+            if hasattr(self, '_' + key):
+                setattr(self, '_' + key, value)
+            else:
+                setattr(self, key, value)
 
     def save(self) -> None:
         log_kwargs = dict()

@@ -125,7 +125,7 @@ def show_flow_run_info(
     ) -> None:
     print(
         f'{flow.name}',
-        f" {str(flow_run_model.id).split('-')[0]}..."
+        f" {str(flow_run_model).split('-')[0]}..."
     )
 
     if flow_run_model.schedule_datetime is not None:
@@ -148,6 +148,11 @@ def show_flow_run_info(
     print(
         ' ', 'Status            :',
         flow_run_model.status
+        + (
+            f"  ({str(flow_run_model.flow_schedule_id).split('-')[0]}...)"
+            if flow_run_model.flow_schedule_id is not None
+            else ''
+        )
     )
 
     if flow_run_model.status in (
@@ -210,7 +215,7 @@ def show_flow_run_info(
 def show_task_run_info(task_run_model: TaskRunModel) -> None:
     print(
         f'  {task_run_model.task.name} ',
-        f"{str(task_run_model.id).split('-')[0]}..."
+        f"{str(task_run_model).split('-')[0]}..."
     )
 
     print(

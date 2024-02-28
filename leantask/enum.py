@@ -72,10 +72,13 @@ class TaskRunStatus(UnknownEnumMixin, Enum):
     DONE = 0
     '''Successfully run the task.'''
 
-    PENDING = 10
+    SCHEDULED = 10
+    '''The task has been scheduled.'''
+
+    PENDING = 11
     '''The task has been scheduled and is waiting to be executed.'''
 
-    CANCELED = 11
+    CANCELED = 12
     '''The flow, task parent, has been canceled while waiting to run thus it's canceled.'''
 
     RUNNING = 20

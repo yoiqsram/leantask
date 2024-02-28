@@ -76,8 +76,9 @@ def show_info(
         print(
             ' ', '- Last run status          :',
             flow_run_models[-1].status,
-            f" (for {(flow_run_models[-1].modified_datetime - flow_run_models[-1].started_datetime).total_seconds():.2f}s",
-            f"at {flow_run_models[-1].created_datetime.isoformat(sep=' ', timespec='seconds')})"
+            ( f"({flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')})" )
+                if flow_run_models[-1].started_datetime is not None
+                else f"(scheduled at {flow_run_models[-1].created_datetime.isoformat(sep=' ', timespec='seconds')})"
         )
 
         done_flow_run_models = [
@@ -89,7 +90,8 @@ def show_info(
         if len(done_flow_run_models) > 0:
             print(
                 len(done_flow_run_models),
-                f" (latest run at {done_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')})"
+                f" (latest run at {done_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')}",
+                f"for {(done_flow_run_models[-1].modified_datetime - done_flow_run_models[-1].started_datetime).total_seconds():.2f}s)"
             )
         else:
             print(0)
@@ -103,7 +105,8 @@ def show_info(
         if len(failed_flow_run_models) > 0:
             print(
                 len(failed_flow_run_models),
-                f" (latest run at {failed_flow_run_models[-1].started_datetime.isoformat(sep=' ')})"
+                f" (latest run at {failed_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespect='seconds')})",
+                f"for {(failed_flow_run_models[-1].modified_datetime - failed_flow_run_models[-1].started_datetime).total_seconds():.2f}s)"
             )
         else:
             print(0)
@@ -117,7 +120,8 @@ def show_info(
         if len(running_flow_run_models) > 0:
             print(
                 len(running_flow_run_models),
-                f" (latest run at {running_flow_run_models[-1].started_datetime.isoformat(sep=' ')})"
+                f" (latest run at {running_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespect='seconds')})",
+                f"for {(running_flow_run_models[-1].modified_datetime - running_flow_run_models[-1].started_datetime).total_seconds():.2f}s)"
             )
         else:
             print(0)

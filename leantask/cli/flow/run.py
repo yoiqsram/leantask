@@ -3,11 +3,10 @@ import sys
 from typing import Callable
 
 from ...context import GlobalContext
-from ...database import FlowModel, FlowRunModel
+from ...database import FlowRunModel
 from ...enum import FlowRunStatus
 from ...flow import Flow, FlowRun
 from ...logging import get_local_logger, get_logger
-from ...utils.cache import load_cache
 from ...utils.script import get_confirmation
 from ...utils.string import quote
 
@@ -21,8 +20,8 @@ def add_run_parser(subparsers) -> Callable:
         description='run flow'
     )
     parser.add_argument(
-        '--cache',
-        help=argparse.SUPPRESS
+        '--run-id',
+        help='Continue run based on flow run id.'
     )
     parser.add_argument(
         '--local', '-L',
@@ -73,32 +72,12 @@ def run_flow(
     GlobalContext.LOCAL_RUN = args.local
     GlobalContext.SCHEDULER_SESSION_ID = args.scheduler_session_id
 
-    if args.cache is not None:
-        logger.debug('Prepare flow run using the provided cache.')
-        if not args.force and not flow.active:
-            logger.error('Flow is currently inactive.')
-            raise SystemExit(FlowRunStatus.CANCELED.value)
-
-        cache = load_cache(args.cache)
-        flow_model: FlowModel = cache['flow_model']
-        flow_run_model: FlowRunModel = cache['flow_run_model']
-
-        if flow_model.name != flow.name \
-                or flow_model.checksum != flow.checksum:
-            logger.error('Flow from cache is different with the current flow.')
-            raise SystemExit(FlowRunStatus.UNKNOWN.value)
-
-        logger.debug('Add flow run using cache.')
-        flow_run = FlowRun(
+    if args.run_id is not None:
+        prepare_flow_from_database(
             flow,
-            max_delay=flow_run_model.max_delay,
-            is_manual=flow_run_model.is_manual,
-            status=getattr(FlowRunStatus, flow_run_model.status),
-            run_id=flow_run_model.id,
-            schedule_id=flow_run_model.flow_schedule,
-            schedule_datetime=flow_run_model.schedule_datetime
+            run_id=args.run_id,
+            force=args.force
         )
-        flow.add_run(flow_run)
 
     elif not args.force \
             and not args.local:
@@ -123,14 +102,14 @@ def run_flow(
 
             logger.debug('User confirmed to run the flow that is currently inactive.')
 
-    if args.cache is None and not flow._model_exists:
+    if not flow._model_exists:
         logger.error(
             'Flow has not been indexed. Use this command to index the flow:\n'
             f'{quote(sys.executable)} {quote(flow.path)} index'
         )
         raise SystemExit(FlowRunStatus.UNKNOWN.value)
 
-    if args.cache is None and flow.checksum != flow._model.checksum:
+    if flow.checksum != flow._model.checksum:
         logger.error(
             'Flow has been changed from the last time indexed at '
             + flow._model.modified_datetime.isoformat(sep=' ', timespec='minutes') + '.\n'
@@ -145,4 +124,66 @@ def run_flow(
 
     except Exception as exc:
         logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
-        raise SystemExit(FlowRunStatus.FAILED.value)
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)
+
+
+def prepare_flow_from_database(
+        flow: Flow,
+        run_id: str,
+        force: bool
+    ):
+    if not force and not flow.active:
+        logger.error('Flow is currently inactive.')
+        raise SystemExit(FlowRunStatus.CANCELED.value)
+
+    try:
+        keyword = run_id.replace('.', '') + '*'
+        flow_run_model = (
+            FlowRunModel.select()
+            .where(FlowRunModel.id.like(keyword))
+            .order_by(FlowRunModel.created_datetime)
+            .limit(1)
+            [0]
+        )
+    except IndexError:
+        logger.error('No run was found.')
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)
+
+    if flow.name != flow_run_model.flow.name:
+        logger.error(
+            f"Current flow '{flow.name}' is different to "
+            f"flow run which from using '{flow_run_model.flow.name}'."
+        )
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)
+
+    if flow_run_model.flow.checksum != flow.checksum:
+        logger.error(
+            'Flow has been changed from the last time indexed at '
+            + flow_run_model.flow.modified_datetime.isoformat(sep=' ', timespec='minutes') + '.\n'
+            + 'Use this command to reindex the flow:\n'
+            + f'{quote(sys.executable)} {quote(flow.path)} index'
+        )
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)
+
+    logger.debug('Prepare flow run from database.')
+    try:
+        flow_run = FlowRun(
+            flow,
+            run_id=flow_run_model.id
+        )
+        flow_run.create_task_runs()
+
+    except:
+        logger.error('An error occured while preparing flow run.', exc_info=True)
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)
+
+    if flow_run.status in (
+            FlowRunStatus.DONE,
+            FlowRunStatus.FAILED,
+            FlowRunStatus.FAILED_TIMEOUT_DELAY,
+            FlowRunStatus.FAILED_TIMEOUT_RUN,
+            FlowRunStatus.CANCELED,
+            FlowRunStatus.CANCELED_BY_USER
+        ):
+        logger.error(f"Flow run has been already over with latest status '{flow_run.status.name}'.")
+        raise SystemExit(FlowRunStatus.UNKNOWN.value)

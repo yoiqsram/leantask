@@ -5,8 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set, Union
 
-from ..database import TaskModel, TaskDownstreamModel, TaskRunModel
-from ..database.log_models import TaskDownstreamLogModel
+from ..database import TaskModel, TaskRunModel
 from ..enum import TaskRunStatus
 from ..logging import get_task_run_logger
 from ..utils.string import obj_repr, validate_use_safe_chars
@@ -89,27 +88,12 @@ class Task(ModelMixin):
     def runs(self) -> List[TaskRun]:
         return self._runs
 
-    def _setup_existing_model(
+    def _setup_model_from_fields(
             self,
-            __id: str = None,
             flow_id: str = None,
             name: str = None
         ) -> None:
-        if __id is not None:
-            try:
-                self._model = (
-                    self.__model__.select()
-                    .where(self.__model__.id == __id)
-                    .limit(1)
-                    [0]
-                )
-
-                self._model_exists = True
-
-            except IndexError:
-                pass
-
-        elif flow_id is not None and name is not None:
+        if flow_id is not None and name is not None:
             try:
                 self._model = (
                     self.__model__.select()
@@ -173,21 +157,6 @@ class Task(ModelMixin):
     def save(self) -> None:
         super(Task, self).save()
 
-        for downstream_task in self.iter_downstream():
-            model = TaskDownstreamModel(
-                task=self.id,
-                downstream_task=downstream_task.id
-            )
-            model.save()
-
-            log_model = TaskDownstreamLogModel(
-                ref_id=model.id,
-                ref_task=self.id,
-                ref_downstream_task=downstream_task.id,
-                created_datetime=self._model.created_datetime
-            )
-            log_model.save(force_insert=True)
-
     def __rshift__(self, obj: Union[Task, Iterable[Task]]) -> Union[Task, Iterable[Task]]:
         '''Task can be required by another Task or tuple/list of Task.'''
         if isinstance(obj, Task):
@@ -218,32 +187,41 @@ class TaskRun(ModelMixin):
             flow_run,
             task: Task,
             attempt: int = 1,
-            retry_max: int = None,
-            retry_delay: int = None,
             status: TaskRunStatus = TaskRunStatus.PENDING,
             run_id: str = None
         ) -> None:
         self.task = task
         self.flow_run = flow_run
         self.attempt = attempt
-        self.retry_max = retry_max if retry_max is not None else self.task.retry_max
-        self.retry_delay = retry_delay if retry_delay is not None else self.task.retry_delay
-        self.created_datetime: datetime = datetime.now()
-        self.modified_datetime: datetime = self.created_datetime
+        self.retry_max = self.task.retry_max
+        self.retry_delay = self.task.retry_delay
 
-        self._status = status
+        self.created_datetime = datetime.now()
+        self.modified_datetime = self.created_datetime
+        self.started_datetime: datetime = None
+
+        self._status = TaskRunStatus.UNKNOWN
 
         super(TaskRun, self).__init__(
             run_id,
             flow_run_id=self.flow_run.id,
-            task_id=self.task.id
+            task_id=self.task.id,
+            attempt=self.attempt
         )
+
+        self.task.add_run(self)
+        self.flow_run.add_task_run(self)
 
         self.logger = get_task_run_logger(
             self.flow_run.flow.id,
             self.task.id,
             self.id
         )
+
+        if not self._model_exists:
+            self.status = status
+        else:
+            self._status = getattr(TaskRunStatus, self._status)
 
     @property
     def flow_run_id(self) -> str:
@@ -283,29 +261,20 @@ class TaskRun(ModelMixin):
         self._model.status = self._status
         self.modified_datetime = datetime.now()
         self._model.modified_datetime = self.modified_datetime
+        if self._status == TaskRunStatus.RUNNING:
+            self.started_datetime = self.modified_datetime
+            self._model.started_datetime = self.started_datetime
         self.save()
 
-    def _setup_existing_model(
+    def _setup_model_from_fields(
             self,
-            __id: str = None,
             flow_run_id: str = None,
-            task_id: str = None
+            task_id: str = None,
+            attempt: int = None
         ) -> None:
-        if __id is not None:
-            try:
-                self._model = (
-                    self.__model__.select()
-                    .where(self.__model__.id == __id)
-                    .limit(1)
-                    [0]
-                )
-
-                self._model_exists = True
-
-            except IndexError:
-                pass
-
-        elif flow_run_id is not None and task_id is not None:
+        if flow_run_id is not None \
+                and task_id is not None \
+                and attempt is not None:
             try:
                 self._model = (
                     self.__model__.select()
@@ -327,37 +296,32 @@ class TaskRun(ModelMixin):
         if self.status in (
                 TaskRunStatus.DONE,
                 TaskRunStatus.FAILED,
-                TaskRunStatus.FAILED_BY_USER,
+                TaskRunStatus.FAILED_BY_USER
             ):
             return (self.modified_datetime - self.created_datetime).total_seconds()
 
     def execute(self) -> None:
         '''Execute task run and record the status.'''
-        logger = get_task_run_logger(
-            self.flow_run.flow.id,
-            self.task.id,
-            self.id
-        )
-
+        self.logger.info(f"Run task '{self.task.name}' on {self.attempt} attempt.")
         try:
             self._start_datetime = datetime.now()
             self.status = TaskRunStatus.RUNNING
-            self.task.run(logger=logger)
+            self.task.run(logger=self.logger)
             self.status = TaskRunStatus.DONE
 
         except Exception as exc:
             self.status = TaskRunStatus.FAILED
-            logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
+            self.logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
+
+        finally:
+            self.logger.info(f"Task run status: '{self.status.name}'.")
 
     def next_attempt(self) -> TaskRun:
         task_run = TaskRun(
             self.flow_run,
             task=self.task,
-            attempt=self.attempt + 1,
-            retry_max=self.retry_max,
-            retry_delay=self.retry_delay
+            attempt=self.attempt + 1
         )
-        self.flow_run.add_task_run(task_run)
         return task_run
 
     def __repr__(self) -> str:

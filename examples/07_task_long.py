@@ -14,4 +14,4 @@ with Flow(
         'task_long',
         description='Example of long-time task.'
     ) as flow:
-    task = long_task(timeout=30)
+    task = long_task(timeout=45)

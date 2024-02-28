@@ -101,8 +101,7 @@ def execute_and_reschedule_flow(
 def get_unfinished_flow_run_models():
     unfinished_flow_run_status = (
         FlowRunStatus.SCHEDULED.name,
-        FlowRunStatus.SCHEDULED_BY_USER.name,
-        FlowRunStatus.RUNNING.name
+        FlowRunStatus.SCHEDULED_BY_USER.name
     )
     unfinished_flow_run_models = []
 
@@ -128,7 +127,8 @@ def get_unfinished_flow_run_models():
         for flow_run_model in scheduled_flow_run_models:
             logger.info(f"Add flow run of '{flow_run_model.flow.name}'.")
             unfinished_flow_run_models.append(flow_run_model)
-    if len(unfinished_flow_run_models):
+
+    if len(unfinished_flow_run_models) > 0:
         logger.info(
             f'Found {len(unfinished_flow_run_models)} unfinished scheduled flow run(s).'
         )
@@ -141,7 +141,7 @@ def get_unfinished_flow_run_models():
             & FlowRunModel.status.in_(unfinished_flow_run_status)
         )
     )
-    if len(unscheduled_flow_run_models):
+    if len(unscheduled_flow_run_models) > 0:
         logger.info(
             f'Found {len(unscheduled_flow_run_models)} unscheduled flow run(s).'
         )
@@ -239,7 +239,18 @@ class Scheduler:
 
         logger.debug('Run routine has been completed.')
 
-    async def run_loop(self) -> None:
+    async def _run_loop(
+            self,
+            executor: futures.ThreadPoolExecutor = None
+        ) -> None:
+        while True:
+            logger.info('ALIVE')
+            delay_task = asyncio.create_task(asyncio.sleep(self.heartbeat))
+            routine_task = asyncio.create_task(self.run_routine(executor))
+            await routine_task
+            await delay_task
+
+    def run_loop(self) -> None:
         logger.info('Initialize update and schedule flow indexes from database.')
         updated_flow_models = index_all_flows(self._flow_models, self.log_path)
         self._flow_models = list(updated_flow_models.keys())
@@ -252,20 +263,9 @@ class Scheduler:
 
         if self.worker > 0:
             with futures.ThreadPoolExecutor(max_workers=self.worker) as executor:
-                while True:
-                    logger.info('ALIVE')
-                    delay_task = asyncio.create_task(asyncio.sleep(self.heartbeat))
-                    routine_task = asyncio.create_task(self.run_routine(executor))
-                    await routine_task
-                    await delay_task
-
+                asyncio.run(self._run_loop(executor))
         else:
-            while True:
-                logger.info('ALIVE')
-                delay_task = asyncio.create_task(asyncio.sleep(self.heartbeat))
-                routine_task = asyncio.create_task(self.run_routine())
-                await routine_task
-                await delay_task
+            asyncio.run(self._run_loop())
 
     def __repr__(self) -> str:
         return obj_repr(self, 'id', 'heartbeat', 'worker', 'log_path')

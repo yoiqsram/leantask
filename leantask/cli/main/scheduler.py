@@ -1,6 +1,8 @@
 import argparse
 from typing import Callable
 
+from ...scheduler import Scheduler
+
 
 def add_scheduler_parser(subparsers) -> Callable:
     parser: argparse.ArgumentParser = subparsers.add_parser(
@@ -34,13 +36,9 @@ def add_scheduler_parser(subparsers) -> Callable:
 
 
 def run_scheduler(args: argparse.Namespace) -> None:
-    import asyncio
-    from ...scheduler import Scheduler
-
     scheduler = Scheduler(
         worker=args.worker,
         heartbeat=args.heartbeat,
         debug=args.debug
     )
-
-    asyncio.run(scheduler.run_loop())
+    scheduler.run_loop()

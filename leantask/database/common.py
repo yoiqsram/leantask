@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 from pathlib import Path
 from peewee import (
@@ -6,7 +5,7 @@ from peewee import (
     AutoField, IntegerField, FloatField,
     CharField, FixedCharField, TextField,
     BooleanField, DateTimeField, Field,
-    UUIDField, ForeignKeyField, SQL
+    ForeignKeyField, SQL
 )
 
 from ..context import GlobalContext

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Set, Union
+from typing import Any, Dict, Generator, Iterable, List, Set, Union
 
 from ..database import TaskModel, TaskRunModel
 from ..enum import TaskRunStatus
@@ -290,6 +290,10 @@ class TaskRun(ModelMixin):
 
             except IndexError:
                 pass
+
+    def iter_downstream(self) -> Generator[TaskRun]:
+        for downstream_task in self.task.iter_downstream():
+            yield self.flow_run._task_runs[downstream_task]
 
     def total_seconds(self) -> Union[float, None]:
         '''Return total seconds from task run start to task run end.'''

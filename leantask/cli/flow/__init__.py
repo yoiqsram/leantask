@@ -4,7 +4,6 @@ from typing import Callable, Dict, Tuple
 
 from ...context import GlobalContext
 from ...flow import Flow
-from ...utils.script import is_main_script
 from .index import add_index_parser
 from .info import add_info_parser
 from .logs import add_logs_parser
@@ -35,9 +34,6 @@ def parse_args(
 
 
 def run_cli(flow: Flow) -> None:
-    if is_main_script():
-        return
-
     if len(flow.tasks) == 0:
         raise ValueError('Flow must contain at least one task.')
 

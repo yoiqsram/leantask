@@ -1,15 +1,7 @@
 import hashlib
-import inspect
 import subprocess
-import sys
 from pathlib import Path
 from typing import Union
-
-
-def is_main_script() -> bool:
-    main_script_path = Path(sys.argv[0]).resolve()
-    main_caller_path = Path(inspect.stack()[-1].filename).resolve()
-    return main_caller_path != main_script_path
 
 
 def get_confirmation(

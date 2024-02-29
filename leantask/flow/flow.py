@@ -244,11 +244,16 @@ class Flow(ModelMixin):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        import inspect
+        import sys
         from ..cli.flow import run_cli
 
         FlowContext.__active__ = None
-        run_cli(self)
 
+        main_script_path = Path(sys.argv[0]).resolve()
+        main_caller_path = Path(inspect.stack()[1].filename).resolve()
+        if main_caller_path == main_script_path:
+            run_cli(self)
 
 class FlowRun(ModelMixin):
     __model__ = FlowRunModel

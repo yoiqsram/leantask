@@ -6,4 +6,6 @@ with Flow(
         'task_module',
         description='Example of task module.'
     ) as flow:
-    task = logging_task('Example of using task on different module.')
+    task = logging_task(
+        message='Example of using task on different module.'
+    )

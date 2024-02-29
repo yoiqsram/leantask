@@ -134,12 +134,19 @@ class Flow(ModelMixin):
 
         if name is not None:
             try:
-                self._model = (
+                model = (
                     self.__model__.select()
                     .where(self.__model__.name == name)
                     .limit(1)
                     [0]
                 )
+                if Path(model.path).resolve().exists():
+                    raise ValueError(
+                        f"Flow name '{name}' is already registered from '{model.path}'."
+                        ' Please use different name.'
+                    )
+
+                self._model = model
                 self._model_exists = True
                 return
 

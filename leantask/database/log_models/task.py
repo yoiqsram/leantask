@@ -3,7 +3,7 @@ from ..base import LogModel
 from ..common import (
     ForeignKeyField,
     column_integer, column_small_string, column_medium_string,
-    column_uuid_string, column_uuid_primary_key,
+    column_uuid_string, column_uuid_primary_key, column_text,
     column_datetime, column_current_datetime
 )
 from .flow import FlowLogModel, FlowRunLogModel
@@ -56,6 +56,8 @@ class TaskRunLogModel(LogModel):
     attempt = column_integer()
     retry_max = column_integer(default=0)
     retry_delay = column_integer(default=0)
+    params = column_text(null=True)
+    output = column_text(null=True)
     status = column_small_string()
 
     ref_id = column_uuid_string()

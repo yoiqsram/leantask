@@ -1,9 +1,60 @@
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, Dict
 
-from ..context import TaskContext
 from ..task import Task
+
+
+class PythonTask(Task):
+    def __init__(
+            self,
+            func: Callable,
+            name: str = None,
+            output_path: Path = None,
+            retry_max: int = 0,
+            retry_delay: int = 0,
+            attrs: Dict[str, Any] = None,
+            params: Dict[str, Any] = None,
+            flow = None):
+        if name is None:
+            name = func.__name__
+
+        super(PythonTask, self).__init__(
+            name=name,
+            output_path=output_path,
+            retry_max=retry_max,
+            retry_delay=retry_delay,
+            attrs=attrs,
+            params=params,
+            flow=flow
+        )
+
+        self._func = func
+
+    def run(
+            self,
+            run_params: Dict[str, Any],
+            logger: logging.Logger
+        ):
+        task_kwargs = dict()
+        if 'logger' in self._func.__code__.co_varnames:
+            task_kwargs['logger'] = logger
+
+        if 'attrs' in self._func.__code__.co_varnames:
+            task_kwargs['attrs'] = self.attrs
+
+        if 'inputs' in self._func.__code__.co_varnames:
+            task_kwargs['inputs'] = self.inputs()
+
+        if 'run_params' in self._func.__code__.co_varnames:
+            task_kwargs['run_params'] = run_params
+
+        output_obj = self._func(**self.params, **task_kwargs)
+        if self.output_path is not None:
+            with self.output().open('w') as f:
+                f.write(output_obj)
+        else:
+            self.output().set(output_obj)
 
 
 def python_task(
@@ -23,16 +74,7 @@ def python_task(
                 **task_kwargs
             ) -> Task:
             '''Register a new task function.'''
-            if task_name is None:
-                task_name = func.__name__
-
-            if task_name in TaskContext.__names__:
-                raise ValueError(
-                    f"There's already a Task named '{task_name}'."
-                    " Define a specific name or change your function name."
-                )
-
-            reserved_kwargs = {'attrs', 'inputs', 'logger'}
+            reserved_kwargs = {'attrs', 'inputs', 'logger', 'params', 'run_params'}
             params = dict()
             for key, value in task_kwargs.items():
                 if key in reserved_kwargs:
@@ -46,37 +88,16 @@ def python_task(
             if output_file and task_output_path is None:
                 raise AttributeError("Task 'task_output_path' should be filled.")
 
-            class PythonTask(Task):
-                def __init__(self):
-                    super(PythonTask, self).__init__(
-                        name=task_name,
-                        output_path=task_output_path,
-                        retry_max=task_retry_max,
-                        retry_delay=task_retry_delay,
-                        attrs=attrs,
-                        params=params,
-                        flow=task_flow
-                    )
-
-                def run(self, logger: logging.Logger):
-                    task_kwargs = dict()
-                    if 'logger' in func.__code__.co_varnames:
-                        task_kwargs['logger'] = logger
-
-                    if 'attrs' in func.__code__.co_varnames:
-                        task_kwargs['attrs'] = self.attrs
-
-                    if 'inputs' in func.__code__.co_varnames:
-                        task_kwargs['inputs'] = self.inputs()
-
-                    output_obj = func(**self.params, **task_kwargs)
-                    if output_file:
-                        with self.output().open('w') as f:
-                            f.write(output_obj)
-                    else:
-                        self.output().set(output_obj)
-
-            return PythonTask()
+            return PythonTask(
+                func,
+                name=task_name,
+                output_path=task_output_path,
+                retry_max=task_retry_max,
+                retry_delay=task_retry_delay,
+                attrs=attrs,
+                params=params,
+                flow=task_flow
+            )
 
         return task_register
 

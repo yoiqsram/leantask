@@ -32,6 +32,11 @@ def add_run_parser(subparsers) -> Callable:
         )
     )
     parser.add_argument(
+        '--rerun', '-R',
+        action='store_true',
+        help='Rerun failed or canceled run.'
+    )
+    parser.add_argument(
         '--force', '-F',
         action='store_true',
         help='NOT RECOMMENDED. Bypass any confirmation before run.'
@@ -76,6 +81,7 @@ def run_flow(
         prepare_flow_from_database(
             flow,
             run_id=args.run_id,
+            rerun=args.rerun,
             force=args.force
         )
 
@@ -130,6 +136,7 @@ def run_flow(
 def prepare_flow_from_database(
         flow: Flow,
         run_id: str,
+        rerun: bool,
         force: bool
     ):
     if not force and not flow.active:
@@ -165,12 +172,20 @@ def prepare_flow_from_database(
         )
         raise SystemExit(FlowRunStatus.UNKNOWN.value)
 
-    logger.debug('Prepare flow run from database.')
     try:
-        flow_run = FlowRun(
-            flow,
-            run_id=flow_run_model.id
-        )
+        if rerun:
+            logger.debug('Prepare flow run duplicate from database.')
+            flow_run = FlowRun(
+                flow,
+                status=FlowRunStatus.PENDING
+            )
+        else:
+            logger.debug('Prepare flow run from database.')
+            flow_run = FlowRun(
+                flow,
+                run_id=flow_run_model.id
+            )
+
         flow_run.create_task_runs()
 
     except:

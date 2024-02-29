@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-from typing import List, Set, Union
+from typing import Any, Dict, List, Set, Union
 
 from ..context import GlobalContext
 from ..database import (
@@ -172,14 +172,18 @@ class Flow(ModelMixin):
 
         self._runs.append(flow_run)
 
-    def run(self) -> FlowRun:
+    def run(self, run_params: Dict[str, Any] = None) -> FlowRun:
         if len(self.runs) == 0 \
                 or self.runs[-1].status in (
                     FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
                     FlowRunStatus.DONE, FlowRunStatus.FAILED,
                     FlowRunStatus.FAILED_TIMEOUT_DELAY, FlowRunStatus.FAILED_TIMEOUT_RUN
                 ):
-            flow_run = FlowRun(self, status=FlowRunStatus.RUNNING)
+            flow_run = FlowRun(
+                self,
+                params=run_params,
+                status=FlowRunStatus.RUNNING
+            )
             flow_run.create_task_runs()
 
         else:
@@ -264,11 +268,12 @@ class Flow(ModelMixin):
 
 class FlowRun(ModelMixin):
     __model__ = FlowRunModel
-    __refs__ = ('id', 'flow', 'flow_schedule')
+    __refs__ = ('id', 'flow', 'flow_schedule_id')
 
     def __init__(
             self,
             flow: Flow,
+            params: Dict[str, Any] = None,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
             is_manual: bool = None,
             run_id: str = None,
@@ -276,6 +281,7 @@ class FlowRun(ModelMixin):
             schedule_datetime: datetime = None
         ) -> None:
         self.flow = flow
+        self.params = params if params is not None else dict()
         self.flow_schedule_id = schedule_id
         self.schedule_datetime = schedule_datetime
         self.is_manual = is_manual if is_manual is not None else True
@@ -299,7 +305,7 @@ class FlowRun(ModelMixin):
             self.status = status
 
         else:
-            self._status = getattr(FlowRunStatus, self._status)
+            self._status = getattr(FlowRunStatus, self._model.status)
             self.flow_schedule_id = self._model.flow_schedule_id
 
     @property
@@ -401,7 +407,7 @@ class FlowRun(ModelMixin):
                     )
                     break
 
-                self.logger.debug(f"Wait for {task_run.retry_delay} s before retrying.")
+                self.logger.debug(f"Wait for {task_run.retry_delay}s before retrying.")
                 sleep(task_run.retry_delay)
                 task_run = task_run.next_attempt()
 

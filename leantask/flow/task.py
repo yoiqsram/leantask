@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -24,8 +23,8 @@ class Task(ModelMixin):
             output_path: Path = None,
             retry_max: int = 0,
             retry_delay: int = 0,
-            attrs: dict = None,
-            params: dict = None,
+            attrs: Dict[str, Any] = None,
+            params: Dict[str, Any] = None,
             flow = None,
             task_id: str = None
         ) -> None:
@@ -114,7 +113,11 @@ class Task(ModelMixin):
     def add_run(self, task_run: TaskRun) -> None:
         self._runs.append(task_run)
 
-    def run(self, logger: logging.Logger) -> None:
+    def run(
+            self,
+            run_params: Dict[str, Any],
+            logger: logging.Logger
+        ) -> None:
         '''Replace this method to be implemented by your new subclass.'''
         raise NotImplemented("You need to define Task 'run' method.")
 
@@ -217,15 +220,15 @@ class TaskRun(ModelMixin):
         self.flow_run.add_task_run(self)
 
         self.logger = get_task_run_logger(
-            self.flow_run.flow.id,
-            self.task.id,
-            self.id
+            flow_id=self.flow_run.flow.id,
+            task_id=self.task.id,
+            task_run_id=self.id
         )
 
         if not self._model_exists:
             self.status = status
         else:
-            self._status = getattr(TaskRunStatus, self._status)
+            self._status = getattr(TaskRunStatus, self._model.status)
 
     @property
     def flow_run_id(self) -> str:
@@ -274,6 +277,13 @@ class TaskRun(ModelMixin):
     def output(self) -> TaskOutput:
         return self._output
 
+    @property
+    def run_params(self) -> Dict[str, Any]:
+        params = self.flow_run.params.copy()
+        params['schedule_datetime'] = self.flow_run.schedule_datetime
+        params['run_datetime'] = self.flow_run.started_datetime
+        return params
+
     def _setup_model_from_fields(
             self,
             flow_run_id: str = None,
@@ -289,8 +299,8 @@ class TaskRun(ModelMixin):
                     .where(
                         (self.__model__.flow_run == self.flow_run_id)
                         & (self.__model__.task == task_id)
+                        & (self.__model__.attempt == attempt)
                     )
-                    .order_by(self.__model__.attempt.desc())
                     .limit(1)
                     [0]
                 )
@@ -318,8 +328,13 @@ class TaskRun(ModelMixin):
         try:
             self._start_datetime = datetime.now()
             self.status = TaskRunStatus.RUNNING
-            self.task.run(logger=self.logger)
+
+            self.task.run(
+                run_params=self.run_params,
+                logger=self.logger
+            )
             self._output = self.task._output
+
             self.status = TaskRunStatus.DONE
 
         except Exception as exc:

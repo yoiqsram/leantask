@@ -10,7 +10,7 @@ def print_task(message: str, logger: logging.Logger):
 
 
 @python_task(attrs={'attempt_count': 0})
-def fail_task(
+def fail_retry_task(
         attrs,
         logger: logging.Logger,
         message: str,
@@ -31,7 +31,11 @@ def json_output(data: dict, logger: logging.Logger):
 @python_task(output_file=True)
 def write_file(inputs, logger: logging.Logger):
     logger.info(f'Write file from inputs: {inputs}')
-    return json.dumps(inputs)
+    _inputs = {
+        key: value.value
+        for key, value in inputs.items()
+    }
+    return json.dumps(_inputs)
 
 
 with Flow(
@@ -63,7 +67,7 @@ with Flow(
         message='Task #2 run after Task #1.a'
     )
 
-    task_2_a = fail_task(
+    task_2_a = fail_retry_task(
         task_name='2_a_fail',
         task_retry_max=1,
         message='Task #2.a run after some attempt(s).'

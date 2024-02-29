@@ -4,7 +4,7 @@ from leantask import python_task, Flow
 
 @python_task(attrs={'retry_count': 0})
 def fail_task(
-        attrs,
+        attrs: dict,
         logger: logging.Logger,
         on_retry: int = 1
     ):

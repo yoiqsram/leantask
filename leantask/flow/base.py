@@ -120,6 +120,18 @@ class ModelMixin:
             target = getattr(self, key)
             setattr(self, key, _decode(value, target))
 
+    def fetch(self) -> None:
+        if not self._model_exists:
+            raise AttributeError('You need to setup the model first.')
+
+        self._model = (
+            self.__model__.select()
+            .where(self.__model__.id == self._model.id)
+            .limit(1)
+            [0]
+        )
+        self._set_attributes_from_model()
+
     def save(self) -> None:
         log_kwargs = dict()
         for key, field in self._model._meta.fields.items():

@@ -1,5 +1,6 @@
 import argparse
 import sys
+from datetime import datetime
 from typing import Callable, List
 
 from ...database import FlowRunModel, FlowScheduleModel
@@ -105,7 +106,7 @@ def show_info(
         if len(failed_flow_run_models) > 0:
             print(
                 len(failed_flow_run_models),
-                f" (latest run at {failed_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespect='seconds')})",
+                f" (latest run at {failed_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')}",
                 f"for {(failed_flow_run_models[-1].modified_datetime - failed_flow_run_models[-1].started_datetime).total_seconds():.2f}s)"
             )
         else:
@@ -120,7 +121,7 @@ def show_info(
         if len(running_flow_run_models) > 0:
             print(
                 len(running_flow_run_models),
-                f" (latest run at {running_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespect='seconds')})",
+                f" (latest run at {running_flow_run_models[-1].started_datetime.isoformat(sep=' ', timespec='seconds')}",
                 f"for {(running_flow_run_models[-1].modified_datetime - running_flow_run_models[-1].started_datetime).total_seconds():.2f}s)"
             )
         else:

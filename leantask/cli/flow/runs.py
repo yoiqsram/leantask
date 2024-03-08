@@ -31,6 +31,10 @@ def add_runs_parser(subparsers) -> Callable:
         help='Maximum number of runs info to be shown.'
     )
     list_option.add_argument(
+        '--status', '-S',
+        help='Filter run status.'
+    )
+    list_option.add_argument(
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
@@ -106,11 +110,23 @@ def show_runs(
     else:
         limit = args.limit if hasattr(args, 'limit') else LIMIT
 
-        flow_run_models: List[FlowRunModel] = list(
-            flow._model.flow_runs
-            .order_by(FlowRunModel.modified_datetime.desc())
-            .limit(limit)
-        )
+        if args.status is None:
+            flow_run_models: List[FlowRunModel] = list(
+                flow._model.flow_runs
+                .order_by(FlowRunModel.modified_datetime.desc())
+                .limit(limit)
+            )
+        
+        elif hasattr(FlowRunStatus, args.status.upper()):
+            flow_run_models: List[FlowRunModel] = list(
+                flow._model.flow_runs
+                .where(FlowRunModel.status == args.status)
+                .order_by(FlowRunModel.modified_datetime.desc())
+                .limit(limit)
+            )
+
+        else:
+            raise ValueError(f"Unknown status of '{args.status}'.")
 
         if len(flow_run_models) == 0:
             print('No run history.')

@@ -11,4 +11,4 @@ with Flow(
         'hello_world',
         description='Example of the very basic flow.'
     ) as flow:
-    python_task = hello_world('there')
+    python_task = hello_world(name='there')

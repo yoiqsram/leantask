@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-from typing import List, Set, Union
+from typing import Any, Dict, List, Set, Union
 
 from ..context import GlobalContext
 from ..database import (
@@ -134,12 +134,19 @@ class Flow(ModelMixin):
 
         if name is not None:
             try:
-                self._model = (
+                model = (
                     self.__model__.select()
                     .where(self.__model__.name == name)
                     .limit(1)
                     [0]
                 )
+                if Path(model.path).resolve().exists():
+                    raise ValueError(
+                        f"Flow name '{name}' is already registered from '{model.path}'."
+                        ' Please use different name.'
+                    )
+
+                self._model = model
                 self._model_exists = True
                 return
 
@@ -165,14 +172,18 @@ class Flow(ModelMixin):
 
         self._runs.append(flow_run)
 
-    def run(self) -> FlowRun:
+    def run(self, run_params: Dict[str, Any] = None) -> FlowRun:
         if len(self.runs) == 0 \
                 or self.runs[-1].status in (
                     FlowRunStatus.CANCELED, FlowRunStatus.CANCELED_BY_USER,
                     FlowRunStatus.DONE, FlowRunStatus.FAILED,
                     FlowRunStatus.FAILED_TIMEOUT_DELAY, FlowRunStatus.FAILED_TIMEOUT_RUN
                 ):
-            flow_run = FlowRun(self, status=FlowRunStatus.RUNNING)
+            flow_run = FlowRun(
+                self,
+                params=run_params,
+                status=FlowRunStatus.RUNNING
+            )
             flow_run.create_task_runs()
 
         else:
@@ -257,11 +268,12 @@ class Flow(ModelMixin):
 
 class FlowRun(ModelMixin):
     __model__ = FlowRunModel
-    __refs__ = ('id', 'flow', 'flow_schedule')
+    __refs__ = ('id', 'flow', 'flow_schedule_id')
 
     def __init__(
             self,
             flow: Flow,
+            params: Dict[str, Any] = None,
             status: FlowRunStatus = FlowRunStatus.UNKNOWN,
             is_manual: bool = None,
             run_id: str = None,
@@ -269,6 +281,7 @@ class FlowRun(ModelMixin):
             schedule_datetime: datetime = None
         ) -> None:
         self.flow = flow
+        self.params = params if params is not None else dict()
         self.flow_schedule_id = schedule_id
         self.schedule_datetime = schedule_datetime
         self.is_manual = is_manual if is_manual is not None else True
@@ -278,7 +291,7 @@ class FlowRun(ModelMixin):
         self.modified_datetime = self.created_datetime
         self.started_datetime: datetime = None
 
-        self._task_runs: OrderedDict[Task, TaskRun] = OrderedDict()
+        self._task_runs_sorted: OrderedDict[Task, TaskRun] = OrderedDict()
         self._status = FlowRunStatus.UNKNOWN
 
         super(FlowRun, self).__init__(run_id)
@@ -292,7 +305,7 @@ class FlowRun(ModelMixin):
             self.status = status
 
         else:
-            self._status = getattr(FlowRunStatus, self._status)
+            self._status = getattr(FlowRunStatus, self._model.status)
             self.flow_schedule_id = self._model.flow_schedule_id
 
     @property
@@ -305,7 +318,7 @@ class FlowRun(ModelMixin):
 
     @property
     def task_runs_sorted(self) -> OrderedDict[Task, TaskRun]:
-        return self._task_runs
+        return self._task_runs_sorted
 
     @property
     def status(self) -> FlowRunStatus:
@@ -346,7 +359,7 @@ class FlowRun(ModelMixin):
                 FlowRunStatus.CANCELED,
                 FlowRunStatus.CANCELED_BY_USER
             ):
-            for _, task_run in self._task_runs.values():
+            for task_run in self._task_runs_sorted.values():
                 if task_run.status in (
                         TaskRunStatus.SCHEDULED,
                         TaskRunStatus.PENDING
@@ -357,55 +370,67 @@ class FlowRun(ModelMixin):
         if not isinstance(task_run, TaskRun):
             raise TypeError()
 
-        self._task_runs[task_run.task] = task_run
+        self._task_runs_sorted[task_run.task] = task_run
+
+    def execute_task_run(self, task_run: TaskRun) -> TaskRunStatus:
+        self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
+
+        if task_run.status not in (
+                TaskRunStatus.SCHEDULED,
+                TaskRunStatus.PENDING
+            ):
+            self.logger.debug(
+                f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}'"
+                f" thus it will not be run."
+            )
+            return task_run.status
+
+        while True:
+            task_run.execute()
+
+            if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
+                break
+
+            if task_run.attempt > task_run.retry_max:
+                self.logger.info(
+                    f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
+                    f" and reaching the maximum attempt of {task_run.retry_max}."
+                )
+                break
+
+            self.logger.debug(f"Wait for {task_run.retry_delay}s before retrying.")
+            sleep(task_run.retry_delay)
+            task_run = task_run.next_attempt()
+
+        if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
+            self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
+            for downstream_task_run in task_run.iter_downstream():
+                self.logger.debug(
+                    f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
+                )
+                downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
+
+        return task_run.status
 
     def execute(self) -> FlowRunStatus:
         self.logger.info(f"Run flow '{self.flow.name}'.")
 
         has_failed = False
-        task_runs = self._task_runs.values()
+        task_runs = self._task_runs_sorted.values()
         if len(task_runs) == 0:
             has_failed = True
             self.logger.error('No task run was found.')
 
-        for task_run in self._task_runs.values():
-            self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
-
-            if task_run.status not in (
-                    TaskRunStatus.SCHEDULED,
-                    TaskRunStatus.PENDING
+        for task_run in self._task_runs_sorted.values():
+            task_run_status = self.execute_task_run(task_run)
+            if task_run_status in (
+                TaskRunStatus.FAILED,
+                TaskRunStatus.FAILED_TIMEOUT_DELAY,
+                TaskRunStatus.FAILED_TIMEOUT_RUN,
+                TaskRunStatus.FAILED_BY_USER,
+                TaskRunStatus.FAILED_UPSTREAM,
                 ):
-                self.logger.debug(
-                    f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}'"
-                    f" thus it will not be run."
-                )
-                continue
-
-            while True:
-                task_run.execute()
-
-                if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
-                    break
-
-                if task_run.attempt > task_run.retry_max:
-                    self.logger.info(
-                        f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
-                        f" and reaching the maximum attempt of {task_run.retry_max}."
-                    )
-                    break
-
-                self.logger.debug(f"Wait for {task_run.retry_delay} s before retrying.")
-                sleep(task_run.retry_delay)
-                task_run = task_run.next_attempt()
-
-            if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-                self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
                 has_failed = True
-                for downstream_task_run in task_run.iter_downstream():
-                    self.logger.debug(
-                        f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
-                    )
-                    downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
 
         if has_failed:
             self.logger.debug(

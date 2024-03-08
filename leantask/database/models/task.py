@@ -3,7 +3,7 @@ from ..base import BaseModel
 from ..common import (
     ForeignKeyField, SQL,
     column_integer, column_small_string, column_medium_string, column_uuid_primary_key,
-    column_datetime, column_current_datetime, column_modified_datetime
+    column_text, column_datetime, column_current_datetime, column_modified_datetime
 )
 from ..log_models import TaskLogModel, TaskDownstreamLogModel, TaskRunLogModel
 from .flow import FlowModel, FlowRunModel
@@ -61,6 +61,8 @@ class TaskRunModel(BaseModel):
     attempt = column_integer()
     retry_max = column_integer(default=0)
     retry_delay = column_integer(default=0)
+    params = column_text(null=True)
+    output = column_text(null=True)
     status = column_small_string()
 
     created_datetime = column_current_datetime()

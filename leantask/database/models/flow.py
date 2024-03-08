@@ -40,6 +40,7 @@ class FlowScheduleModel(BaseModel):
     schedule_datetime = column_datetime()
     max_delay = column_integer(null=True)
     is_manual = column_boolean(default=True)
+    params = column_text(null=True)
 
     created_datetime = column_current_datetime()
 
@@ -57,6 +58,7 @@ class FlowRunModel(BaseModel):
     schedule_datetime = column_datetime(null=True)
     max_delay = column_integer(null=True)
     is_manual = column_boolean(default=False)
+    params = column_text(null=True)
     status = column_small_string()
 
     flow_schedule_id = column_uuid_string(null=True)

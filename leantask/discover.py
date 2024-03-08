@@ -130,6 +130,10 @@ def index_all_flows(
         flow_path = Path(flow_model.path)
         if flow_path not in flow_checksums:
             logger.info(f"Flow '{flow_model.name}' from '{flow_model.path}' has been removed.")
+
+            flow_model.delete_instance()
+            del updated_flow_models[flow_model]
+
             total_changes += 1
             continue
 

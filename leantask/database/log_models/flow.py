@@ -41,6 +41,7 @@ class FlowRunLogModel(LogModel):
     schedule_datetime = column_datetime(null=True)
     max_delay = column_integer(null=True)
     is_manual = column_boolean(default=False)
+    params = column_text(null=True)
     status = column_small_string()
 
     ref_id = column_uuid_string()

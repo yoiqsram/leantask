@@ -1,3 +1,5 @@
+from __future__ import annotations
+import json
 from pathlib import Path
 from typing import Any, IO
 
@@ -5,7 +7,7 @@ class TaskOutput: ...
 class UndefinedTaskOutput(TaskOutput): ...
 
 
-class ObjectTaskOutput(TaskOutput):
+class JSONTaskOutput(TaskOutput):
     def __init__(self) -> None:
         self._value = None
 
@@ -22,6 +24,14 @@ class ObjectTaskOutput(TaskOutput):
 
     def set(self, value: Any) -> None:
         self._value = value
+
+    def dumps(self) -> str:
+        return json.dumps(self._value)
+
+    @classmethod
+    def loads(self, json_string: str) -> JSONTaskOutput:
+        output = JSONTaskOutput()
+        output.value = json.loads(json_string)
 
 
 class FileTaskOutput(TaskOutput):

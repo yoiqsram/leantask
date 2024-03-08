@@ -1,8 +1,50 @@
 from __future__ import annotations
 from enum import Enum
+import json
+from pathlib import Path
+from typing import Any
 
 from ..database import BaseModel
 from ..database.common import ForeignKeyField
+from .output import TaskOutput, FileTaskOutput, JSONTaskOutput, UndefinedTaskOutput
+
+
+def _encode(value: Any):
+    if isinstance(value, dict):
+        value = json.dumps(value)
+    elif isinstance(value, Enum):
+        value = value.name
+    elif isinstance(value, JSONTaskOutput):
+        if value.value is not None:
+            value = value.dumps()
+        else:
+            value = None
+    elif isinstance(value, FileTaskOutput):
+        value = {
+            'output_path': str(value._output_path.resolve())
+        }
+    elif isinstance(value, TaskOutput):
+        value = None
+    return value
+
+
+def _decode(value: Any, target: Any):
+    if isinstance(target, dict):
+        value = json.loads(value)
+    elif isinstance(target, Enum):
+        value = getattr(target.__class__, value)
+    elif isinstance(target, TaskOutput) and value is None:
+        value = UndefinedTaskOutput()
+    elif isinstance(target, JSONTaskOutput):
+        value = JSONTaskOutput.loads(value)
+    elif isinstance(target, FileTaskOutput):
+        output_path = value.get('output_path')
+        if output_path is not None:
+            value = FileTaskOutput(Path(output_path))
+        else:
+            value = UndefinedTaskOutput
+
+    return value
 
 
 class ModelMixin:
@@ -61,12 +103,12 @@ class ModelMixin:
                 key += '_id'
 
             value = getattr(self, key)
-            kwargs[key] = value if not isinstance(value, Enum) else value.name
+            kwargs[key] = _encode(value)
 
         self._model = self.__model__(**kwargs)
 
     def _set_attributes_from_model(self) -> None:
-        for key, field in self._model._meta.fields.items():
+        for key, _ in self._model._meta.fields.items():
             if not hasattr(self, key) \
                     or key == 'id' \
                     or key in self.__class__.__refs__:
@@ -74,9 +116,21 @@ class ModelMixin:
 
             value = getattr(self._model, key)
             if hasattr(self, '_' + key):
-                setattr(self, '_' + key, value)
-            else:
-                setattr(self, key, value)
+                key = '_' + key
+            target = getattr(self, key)
+            setattr(self, key, _decode(value, target))
+
+    def fetch(self) -> None:
+        if not self._model_exists:
+            raise AttributeError('You need to setup the model first.')
+
+        self._model = (
+            self.__model__.select()
+            .where(self.__model__.id == self._model.id)
+            .limit(1)
+            [0]
+        )
+        self._set_attributes_from_model()
 
     def save(self) -> None:
         log_kwargs = dict()
@@ -92,8 +146,7 @@ class ModelMixin:
                 continue
 
             value = getattr(self, key)
-            value = value if not isinstance(value, Enum) else value.name
-            setattr(self._model, key, value)
+            setattr(self._model, key, _encode(value))
             log_kwargs[log_key] = getattr(self._model, key)
 
         with self._model._meta.database.atomic():

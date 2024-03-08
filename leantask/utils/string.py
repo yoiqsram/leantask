@@ -26,7 +26,7 @@ def validate_use_safe_chars(value: str) -> str:
 
     if re.match(SAFE_CHARS_PATTERN, value) is None:
         raise ValueError(
-            f"Value should only use safe characters. ({SAFE_CHARS_PATTERN})"
+            f"Value should only use safe characters ({SAFE_CHARS_PATTERN}), but '{value}' is provided."
         )
 
     return value

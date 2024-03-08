@@ -3,7 +3,7 @@ from ..base import LogModel
 from ..common import (
     ForeignKeyField,
     column_integer, column_small_string, column_medium_string,
-    column_uuid_string, column_uuid_primary_key,
+    column_uuid_string, column_uuid_primary_key, column_text,
     column_datetime, column_current_datetime
 )
 from .flow import FlowLogModel, FlowRunLogModel
@@ -19,7 +19,7 @@ class TaskLogModel(LogModel):
     ref_id = column_uuid_string()
     ref_flow = ForeignKeyField(
         FlowLogModel,
-        to_field=FlowLogModel.ref_id,
+        field=FlowLogModel.ref_id,
         backref='tasks',
         on_delete='CASCADE'
     )
@@ -36,13 +36,13 @@ class TaskDownstreamLogModel(LogModel):
     ref_id = column_uuid_string()
     ref_task = ForeignKeyField(
         TaskLogModel,
-        to_field=TaskLogModel.ref_id,
+        field=TaskLogModel.ref_id,
         backref='downstreams',
         on_delete='CASCADE'
     )
     ref_downstream_task = ForeignKeyField(
         TaskLogModel,
-        to_field=TaskLogModel.ref_id,
+        field=TaskLogModel.ref_id,
         backref='upstreams',
         on_delete='CASCADE'
     )
@@ -56,18 +56,20 @@ class TaskRunLogModel(LogModel):
     attempt = column_integer()
     retry_max = column_integer(default=0)
     retry_delay = column_integer(default=0)
+    params = column_text(null=True)
+    output = column_text(null=True)
     status = column_small_string()
 
     ref_id = column_uuid_string()
     ref_flow_run = ForeignKeyField(
         FlowRunLogModel,
-        to_field=FlowRunLogModel.ref_id,
+        field=FlowRunLogModel.ref_id,
         backref='task_runs',
         on_delete='CASCADE'
     )
     ref_task = ForeignKeyField(
         TaskLogModel,
-        to_field=TaskLogModel.ref_id,
+        field=TaskLogModel.ref_id,
         backref='task_runs',
         on_delete='CASCADE'
     )

@@ -30,10 +30,6 @@ def add_init_parser(subparsers) -> None:
         help='Project name. Default to project directory name.'
     )
     parser.add_argument(
-        '--description', '-D',
-        help='Project description.'
-    )
-    parser.add_argument(
         '--replace', '-R',
         action='store_true',
         help='Replace project if it already exists.'
@@ -88,10 +84,7 @@ def init_project(args: argparse.Namespace) -> None:
         logger.debug('Project will be replaced.')
 
     try:
-        create_metadata_database(
-            project_name=args.name,
-            project_description=args.description
-        )
+        create_metadata_database(project_name=args.name)
 
     except Exception as exc:
         logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)
@@ -102,10 +95,7 @@ def init_project(args: argparse.Namespace) -> None:
     logger.info(f"Project created successfully on '{GlobalContext.PROJECT_DIR}'.")
 
 
-def create_metadata_database(
-        project_name: str,
-        project_description: str = None
-    ) -> None:
+def create_metadata_database(project_name: str) -> None:
     try:
         database.create_tables([
             FlowModel, FlowScheduleModel, FlowRunModel,
@@ -120,7 +110,6 @@ def create_metadata_database(
 
         project_metadata = {
             'name': project_name,
-            'description': project_description,
             'is_active': True
         }
 

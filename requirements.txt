@@ -1,8 +1,12 @@
 croniter==2.0.1
 docopt==0.6.2
 greenlet==3.0.3
+iniconfig==2.0.0
+packaging==23.2
 peewee==3.17.1
+pluggy==1.4.0
+pytest==8.0.2
 python-dateutil==2.8.2
 pytz==2023.3.post1
 six==1.16.0
-typing-extensions==4.9.0
+typing_extensions==4.9.0

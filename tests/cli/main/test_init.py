@@ -61,8 +61,8 @@ def test_init_new(
 
         validate_leantask_project(project_dir)
 
-    except AssertionError as exc:
-        raise exc
+    except:
+        raise
 
     finally:
         shutil.rmtree(project_dir)
@@ -116,8 +116,8 @@ def test_init_exists(
 
         validate_leantask_project(project_dir)
 
-    except AssertionError as exc:
-        raise exc
+    except:
+        raise
 
     finally:
         shutil.rmtree(project_dir)

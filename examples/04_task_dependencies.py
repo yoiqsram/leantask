@@ -69,7 +69,8 @@ with Flow(
 
     task_2_a = fail_retry_task(
         task_name='2_a_fail',
-        task_retry_max=1,
+        task_retry_max=3,
+        task_retry_delay=5,
         message='Task #2.a run after some attempt(s).'
     )
 

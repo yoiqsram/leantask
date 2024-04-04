@@ -12,19 +12,27 @@ from .output import TaskOutput, FileTaskOutput, JSONTaskOutput, UndefinedTaskOut
 def _encode(value: Any):
     if isinstance(value, dict):
         value = json.dumps(value)
+
+    elif isinstance(value, Path):
+        value = str(value)
+
     elif isinstance(value, Enum):
         value = value.name
+
     elif isinstance(value, JSONTaskOutput):
         if value.value is not None:
             value = value.dumps()
         else:
             value = None
+
     elif isinstance(value, FileTaskOutput):
         value = {
             'output_path': str(value._output_path.resolve())
         }
+
     elif isinstance(value, TaskOutput):
         value = None
+
     return value
 
 

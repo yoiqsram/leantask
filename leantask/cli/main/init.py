@@ -14,7 +14,6 @@ from ...database import (
     database, log_database
 )
 from ...logging import get_local_logger
-from ...utils.script import has_sudo_access, sync_server_time
 from ...utils.string import quote
 
 
@@ -58,19 +57,6 @@ def init_project(args: argparse.Namespace) -> None:
     global logger
     logger = get_local_logger('init')
     logger.info(f"Run command: {' '.join([quote(sys.executable)] + sys.argv)}")
-
-    if has_sudo_access():
-        try:
-            logger.debug('Sync server time.')
-            sync_server_time()
-            logger.debug('Successfully sync time.')
-        except LookupError:
-            logger.warning('Failed to sync time to NTP server.')
-    else:
-        logger.warning(
-            'Failed to sync time due to lack of permission. Please sync your time using this command: '
-            'sudo ntpdate -s ntp.ubuntu.com'
-        )
 
     database_path = GlobalContext.database_path()
     log_database_path = GlobalContext.log_database_path()

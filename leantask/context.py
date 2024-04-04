@@ -44,7 +44,7 @@ class GlobalContext:
 
     try:
         HEARTBEAT = int(os.environ.get('LEANTASK_HEARTBEAT'))
-    except TypeError:
+    except:
         HEARTBEAT = 30
 
     @classmethod

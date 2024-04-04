@@ -2,7 +2,7 @@ import ast
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Set
+from typing import Dict, Set
 
 from .context import GlobalContext
 from .database import FlowModel

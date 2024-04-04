@@ -13,7 +13,7 @@ from ..database import (
     TaskDownstreamModel, TaskDownstreamLogModel,
     database
 )
-from ..enum import FlowIndexStatus, FlowRunStatus, TaskRunStatus
+from ..enum import FlowIndexStatus, FlowRunStatus, TaskRunStatus, FAILED_TASK_RUN_STATUSES
 from ..logging import get_flow_run_logger
 from ..utils.script import calculate_md5
 from ..utils.string import obj_repr, validate_use_safe_chars
@@ -394,7 +394,7 @@ class FlowRun(ModelMixin):
             if task_run.attempt > task_run.retry_max:
                 self.logger.info(
                     f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
-                    f" and reaching the maximum attempt of {task_run.retry_max}."
+                    f" and reaching the maximum retry attempt of {task_run.retry_max}."
                 )
                 break
 
@@ -418,19 +418,17 @@ class FlowRun(ModelMixin):
         has_failed = False
         task_runs = self._task_runs_sorted.values()
         if len(task_runs) == 0:
-            has_failed = True
             self.logger.error('No task run was found.')
+            has_failed = True
 
-        for task_run in self._task_runs_sorted.values():
+        for task_run in task_runs:
+            if task_run.status in FAILED_TASK_RUN_STATUSES:
+                continue
+
             task_run_status = self.execute_task_run(task_run)
-            if task_run_status in (
-                TaskRunStatus.FAILED,
-                TaskRunStatus.FAILED_TIMEOUT_DELAY,
-                TaskRunStatus.FAILED_TIMEOUT_RUN,
-                TaskRunStatus.FAILED_BY_USER,
-                TaskRunStatus.FAILED_UPSTREAM,
-                ):
+            if task_run_status in FAILED_TASK_RUN_STATUSES:
                 has_failed = True
+
 
         if has_failed:
             self.logger.debug(

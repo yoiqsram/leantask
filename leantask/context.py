@@ -17,20 +17,20 @@ def _prepare_log_file(file_path: Path):
 
 
 class GlobalContext:
-    PROJECT_DIR: Path = os.environ.get('PROJECT_DIR', Path(os.getcwd()).resolve())
-    FLOWS_DIRNAME: str = os.environ.get('FLOWS_DIRNAME')
+    PROJECT_DIR: Path = os.environ.get('LEANTASK_PROJECT_DIR', Path(os.getcwd()).resolve())
+    FLOWS_DIRNAME: str = os.environ.get('LEANTASK_FLOWS_DIRNAME')
     CACHE_DIRNAME: str = '__cache__'
     LOG_DIRNAME: str = 'log'
 
-    DATABASE_NAME: str = os.environ.get('DATABASE_NAME', 'leantask.db')
-    LOG_DATABASE_NAME: str = os.environ.get('LOG_DATABASE_NAME', 'leantask_log.db')
+    DATABASE_NAME: str = os.environ.get('LEANTASK_DATABASE_NAME', 'leantask.db')
+    LOG_DATABASE_NAME: str = os.environ.get('LEANTASK_LOG_DATABASE_NAME', 'leantask_log.db')
 
-    LOG_DEBUG: bool = os.environ.get('LOG_DEBUG') == 'True'
-    LOG_QUIET: bool = os.environ.get('LOG_QUIET') == 'True'
-    DEBUG_QUERY: bool = os.environ.get('DEBUG_QUERY') == 'True'
+    LOG_DEBUG: bool = os.environ.get('LEANTASK_DEBUG') == 'True'
+    LOG_QUIET: bool = os.environ.get('LEANTASK_QUIET') == 'True'
+    DEBUG_QUERY: bool = os.environ.get('LEANTASK_DEBUG_QUERY') == 'True'
 
     try:
-        CACHE_TIMEOUT = int(os.environ.get('CACHE_TIMEOUT'))
+        CACHE_TIMEOUT = int(os.environ.get('LEANTASK_CACHE_TIMEOUT'))
     except TypeError:
         CACHE_TIMEOUT = 1800
 
@@ -38,12 +38,12 @@ class GlobalContext:
     SCHEDULER_SESSION_ID: str = None
 
     try:
-        WORKER = int(os.environ.get('WORKER'))
+        WORKER = int(os.environ.get('LEANTASK_WORKER'))
     except TypeError:
         WORKER = 1
 
     try:
-        HEARTBEAT = int(os.environ.get('HEARTBEAT'))
+        HEARTBEAT = int(os.environ.get('LEANTASK_HEARTBEAT'))
     except TypeError:
         HEARTBEAT = 30
 

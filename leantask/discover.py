@@ -122,6 +122,7 @@ def index_all_flows(
         flow_models = flow_models.copy()
 
     total_changes = 0
+    total_errors = 0
     updated_flow_models = {
         flow_model: FlowIndexStatus.UNCHANGED
         for flow_model in flow_models
@@ -143,6 +144,9 @@ def index_all_flows(
             if index_status == FlowIndexStatus.UPDATED:
                 total_changes += 1
 
+            elif index_status in (FlowIndexStatus.FAILED, FlowIndexStatus.UNKNOWN):
+                total_errors += 1
+
             updated_flow_model = (
                 FlowModel.select()
                 .where(FlowModel.path == str(flow_path))
@@ -161,18 +165,20 @@ def index_all_flows(
             log_file_path=log_file_path,
             scheduler_session_id=GlobalContext.SCHEDULER_SESSION_ID
         )
-        updated_flow_model = (
-            FlowModel.select()
-            .where(FlowModel.path == str(flow_path))
-            .limit(1)
-            [0]
-        )
-        updated_flow_models[updated_flow_model] = index_status
+        if index_status in (FlowIndexStatus.UPDATED, FlowIndexStatus.UNCHANGED):
+            updated_flow_model = (
+                FlowModel.select()
+                .where(FlowModel.path == str(flow_path))
+                .limit(1)
+                [0]
+            )
+            updated_flow_models[updated_flow_model] = index_status
+        else:
+            total_errors += 1
 
         if index_status == FlowIndexStatus.UPDATED:
             total_changes += 1
 
-    if total_changes > 0:
-        logger.info(f'Total changes made on flows: {total_changes}.')
-
+    logger.info(f'Total changes made on flows: {total_changes}.')
+    logger.info(f'Total error flows: {total_errors}.')
     return updated_flow_models

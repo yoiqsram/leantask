@@ -9,11 +9,8 @@ from ..database.common import ForeignKeyField
 from .output import TaskOutput, FileTaskOutput, JSONTaskOutput, UndefinedTaskOutput
 
 
-def _encode(value: Any):
-    if isinstance(value, dict):
-        value = json.dumps(value)
-
-    elif isinstance(value, Path):
+def _encode_non_serializable(value: Any):
+    if isinstance(value, Path):
         value = str(value)
 
     elif isinstance(value, Enum):
@@ -21,17 +18,27 @@ def _encode(value: Any):
 
     elif isinstance(value, JSONTaskOutput):
         if value.value is not None:
-            value = value.dumps()
+            value = _encode_non_serializable(value.value)
         else:
             value = None
 
     elif isinstance(value, FileTaskOutput):
         value = {
-            'output_path': str(value._output_path.resolve())
+            'output_path': _encode_non_serializable(value._output_path.resolve())
         }
 
     elif isinstance(value, TaskOutput):
         value = None
+
+    return value
+
+
+def _encode(value: Any):
+    if isinstance(value, dict):
+        value = json.dumps(value, default=_encode_non_serializable)
+
+    else:
+        value = _encode_non_serializable(value)
 
     return value
 

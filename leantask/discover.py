@@ -73,13 +73,14 @@ def has_declare_flow(file_path: Path) -> bool:
 
 def find_flow_checksums() -> Dict[Path, str]:
     gitignore_path = GlobalContext.PROJECT_DIR / '.gitignore'
-    if gitignore_path.exists():
+    if GlobalContext.FLOWS_DIR == GlobalContext.PROJECT_DIR \
+            and gitignore_path.exists():
         gitignore_patterns = parse_gitignore_patterns(gitignore_path)
     else:
         gitignore_patterns = []
 
     flow_checksums = dict()
-    for file_path in GlobalContext.PROJECT_DIR.rglob('*.py'):
+    for file_path in GlobalContext.FLOWS_DIR.rglob('*.py'):
         file_path = GlobalContext.relative_path(file_path)
 
         if is_file_match_patterns(file_path, gitignore_patterns):
@@ -113,13 +114,19 @@ def index_all_flows(
     ) -> Dict[FlowModel, FlowIndexStatus]:
     logger = get_logger('discover', log_file_path)
 
-    flow_checksums = find_flow_checksums()
-
     if flow_models is None:
         logger.debug('Get flow records from database.')
         flow_models = list(FlowModel.select())
     else:
         flow_models = flow_models.copy()
+
+    if GlobalContext.DISCOVER:
+        flow_checksums = find_flow_checksums()
+    else:
+        flow_checksums = {
+            Path(model.path): model.checksum
+            for model in flow_models
+        }
 
     total_changes = 0
     total_errors = 0

@@ -18,16 +18,19 @@ def _prepare_log_file(file_path: Path):
 
 class GlobalContext:
     PROJECT_DIR: Path = os.environ.get('LEANTASK_PROJECT_DIR', Path(os.getcwd()).resolve())
-    FLOWS_DIRNAME: str = os.environ.get('LEANTASK_FLOWS_DIRNAME')
+    FLOWS_DIR: Path = Path(os.environ.get('LEANTASK_FLOWS_DIRN', str(PROJECT_DIR)))
+    if not FLOWS_DIR.is_relative_to(PROJECT_DIR):
+        raise FileExistsError(f"Specified flows directory should be in project directory. '{FLOWS_DIR}'.")
+
     CACHE_DIRNAME: str = '__cache__'
     LOG_DIRNAME: str = 'log'
 
     DATABASE_NAME: str = os.environ.get('LEANTASK_DATABASE_NAME', 'leantask.db')
     LOG_DATABASE_NAME: str = os.environ.get('LEANTASK_LOG_DATABASE_NAME', 'leantask_log.db')
 
-    LOG_DEBUG: bool = os.environ.get('LEANTASK_DEBUG') == 'True'
-    LOG_QUIET: bool = os.environ.get('LEANTASK_QUIET') == 'True'
-    DEBUG_QUERY: bool = os.environ.get('LEANTASK_DEBUG_QUERY') == 'True'
+    LOG_DEBUG: bool = os.environ.get('LEANTASK_DEBUG', 'false').lower() == 'true'
+    LOG_QUIET: bool = os.environ.get('LEANTASK_QUIET', 'false').lower() == 'true'
+    DEBUG_QUERY: bool = os.environ.get('LEANTASK_DEBUG_QUERY', 'false').lower() == 'true'
 
     try:
         CACHE_TIMEOUT = int(os.environ.get('LEANTASK_CACHE_TIMEOUT'))
@@ -46,6 +49,8 @@ class GlobalContext:
         HEARTBEAT = int(os.environ.get('LEANTASK_HEARTBEAT'))
     except:
         HEARTBEAT = 30
+
+    DISCOVER = os.environ.get('LEANTASK_DISCOVER', 'false').lower() == 'true'
 
     @classmethod
     def set_project_dir(cls, value: Path) -> None:
@@ -76,10 +81,10 @@ class GlobalContext:
 
     @classmethod
     def workflows_dir(cls) -> Path:
-        if cls.FLOWS_DIRNAME is None:
+        if cls.FLOWS_DIR is None:
             workflows_dir_path = cls.PROJECT_DIR
         else:
-            workflows_dir_path = cls.PROJECT_DIR / cls.FLOWS_DIRNAME
+            workflows_dir_path = cls.PROJECT_DIR / cls.FLOWS_DIR
 
         if not workflows_dir_path.is_dir():
             workflows_dir_path.mkdir(parents=True)

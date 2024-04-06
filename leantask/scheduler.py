@@ -12,7 +12,6 @@ from .database import FlowModel, FlowRunModel, FlowScheduleModel, SchedulerSessi
 from .discover import index_all_flows
 from .enum import FlowIndexStatus, FlowRunStatus, FlowScheduleStatus
 from .logging import get_logger
-from .utils.script import has_sudo_access, sync_server_time
 from .utils.string import generate_uuid, obj_repr, quote
 
 logger = None
@@ -168,24 +167,9 @@ class Scheduler:
         logger = get_logger('scheduler', self.log_path)
         logger.debug(repr(self))
 
-        self._sync_server_time()
         self._create_scheduler_session()
 
         self._flow_models: List[FlowModel] = None
-
-    def _sync_server_time(self) -> None:
-        if has_sudo_access():
-            try:
-                logger.debug('Sync server time.')
-                sync_server_time()
-                logger.debug('Successfully sync time.')
-            except LookupError:
-                logger.warning('Failed to sync time to NTP server.')
-        else:
-            logger.warning(
-                'Failed to sync time due to lack of permission. Please sync your time using this command: '
-                'sudo ntpdate -s ntp.ubuntu.com'
-            )
 
     def _create_scheduler_session(self) -> None:
         self._model = SchedulerSessionModel(

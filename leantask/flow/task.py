@@ -311,7 +311,7 @@ class TaskRun(ModelMixin):
 
     def iter_downstream(self) -> Generator[TaskRun]:
         for downstream_task in self.task.iter_downstream():
-            yield self.flow_run._task_runs[downstream_task]
+            yield self.flow_run._task_runs_sorted[downstream_task]
 
     def total_seconds(self) -> Union[float, None]:
         '''Return total seconds from task run start to task run end.'''
@@ -324,7 +324,7 @@ class TaskRun(ModelMixin):
 
     def execute(self) -> None:
         '''Execute task run and record the status.'''
-        self.logger.info(f"Run task '{self.task.name}' on {self.attempt} attempt.")
+        self.logger.info(f"Run task '{self.task.name}' - {self.attempt} attempt(s).")
         try:
             self._start_datetime = datetime.now()
             self.status = TaskRunStatus.RUNNING

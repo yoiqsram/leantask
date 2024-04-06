@@ -105,6 +105,15 @@ class TaskRunStatus(UnknownEnumMixin, Enum):
     UNKNOWN = 1
 
 
+FAILED_TASK_RUN_STATUSES = (
+    TaskRunStatus.FAILED,
+    TaskRunStatus.FAILED_TIMEOUT_DELAY,
+    TaskRunStatus.FAILED_TIMEOUT_RUN,
+    TaskRunStatus.FAILED_BY_USER,
+    TaskRunStatus.FAILED_UPSTREAM,
+)
+
+
 class TableName(Enum):
     METADATA = 'metadata'
 

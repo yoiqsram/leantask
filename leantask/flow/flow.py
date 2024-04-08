@@ -25,6 +25,7 @@ from .task import Task, TaskRun
 
 
 class Flow(ModelMixin):
+    __context__ = FlowContext
     __model__ = FlowModel
     __refs__ = ('id', )
 
@@ -39,9 +40,9 @@ class Flow(ModelMixin):
             active: bool = True,
             flow_id: str = None
         ) -> None:
-        if FlowContext.__defined__ is not None:
+        if self.__context__.__defined__ is not None:
             raise RuntimeError('You can only define one flow.')
-        FlowContext.__defined__ = self
+        self.__context__.__defined__ = self
 
         self.name = name
         self.description = description
@@ -56,12 +57,8 @@ class Flow(ModelMixin):
         else:
             self._schedule = None
 
-        try:
-            self._path = GlobalContext.relative_path(Path(inspect.stack()[-1].filename).resolve())
-            self._checksum = calculate_md5(self._path)
-        except FileNotFoundError:
-            self._path = None
-            self._checksum = None
+        self._path = GlobalContext.relative_path(Path(inspect.stack()[1].filename).resolve())
+        self._checksum = calculate_md5(self._path)
 
         self._tasks: Set[Task] = set()
         self._runs: List[FlowRun] = []
@@ -245,13 +242,13 @@ class Flow(ModelMixin):
         return obj_repr(self, 'name', 'path', 'active')
 
     def __enter__(self) -> Flow:
-        if FlowContext.__active__ is not None:
+        if self.__context__.__active__ is not None:
             raise RuntimeError(
                 "There's already an active flow at the moment. "
-                f' ({repr(FlowContext.__active__)})'
+                f' ({repr(self.__context__.__active__)})'
             )
 
-        FlowContext.__active__ = self
+        self.__context__.__active__ = self
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -259,7 +256,7 @@ class Flow(ModelMixin):
         import sys
         from ..cli.flow import run_cli
 
-        FlowContext.__active__ = None
+        self.__context__.__active__ = None
 
         main_script_path = Path(sys.argv[0]).resolve()
         main_caller_path = Path(inspect.stack()[1].filename).resolve()

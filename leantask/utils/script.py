@@ -1,5 +1,5 @@
 import hashlib
-import subprocess
+import importlib
 from pathlib import Path
 from typing import Union
 
@@ -34,3 +34,10 @@ def calculate_md5(file_path: Union[str, Path]) -> str:
         for chunk in iter(lambda: file.read(4096), b''):
             md5.update(chunk)
     return md5.hexdigest()
+
+
+def import_lib(name: str, file_path: Union[str, Path]):
+    spec = importlib.util.spec_from_file_location(name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

@@ -3,7 +3,7 @@ from typing import Callable
 
 from .discover import add_discover_parser
 from .list import add_list_parser
-from .logs import add_logs_parser
+from .log import add_log_parser
 from .run import add_run_parser
 from .schedule import add_schedule_parser
 from .status import add_status_parser
@@ -24,7 +24,7 @@ def add_flows_parser(subparsers) -> Callable:
     command_runners = {
         'discover': add_discover_parser(subparsers),
         'list': add_list_parser(subparsers),
-        'logs': add_logs_parser(subparsers),
+        'log': add_log_parser(subparsers),
         'run': add_run_parser(subparsers),
         'schedule': add_schedule_parser(subparsers),
         'status': add_status_parser(subparsers)

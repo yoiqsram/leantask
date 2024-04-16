@@ -101,7 +101,7 @@ def index_flow(
     ):
     command = ' '.join(
         [quote(sys.executable), quote(flow_path), 'index']
-        + (['--log-file', quote(log_file_path)] if log_file_path is not None else [])
+        + (['--log', quote(log_file_path)] if log_file_path is not None else [])
         + (['--scheduler-session-id', scheduler_session_id] if scheduler_session_id is not None else [])
     )
     flow_index_result = subprocess.run(command, shell=True)

@@ -41,16 +41,11 @@ def add_run_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler-session-id',
-        help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
         help=argparse.SUPPRESS
     )
 

@@ -24,11 +24,6 @@ def add_scheduler_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
 
     return run_scheduler
 
@@ -36,7 +31,6 @@ def add_scheduler_parser(subparsers) -> Callable:
 def run_scheduler(args: argparse.Namespace) -> None:
     scheduler = Scheduler(
         worker=args.worker,
-        heartbeat=args.heartbeat,
-        debug=args.debug
+        heartbeat=args.heartbeat
     )
     scheduler.run_loop()

@@ -35,9 +35,6 @@ def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
 def cli():
     (args, _), command_runners = parse_args()
 
-    if 'debug' in args and args.debug:
-        GlobalContext.LOG_DEBUG = True
-
     if args.command == 'flows': 
         command_runners[args.command][args.flows_command](args)
 

@@ -337,6 +337,10 @@ class TaskRun(ModelMixin):
 
             self.status = TaskRunStatus.DONE
 
+        except KeyboardInterrupt as exc:
+            self.status = TaskRunStatus.FAILED_BY_USER
+            self.logger.error(f'{exc.__class__.__name__}')
+
         except Exception as exc:
             self.status = TaskRunStatus.FAILED
             self.logger.error(f'{exc.__class__.__name__}: {exc}', exc_info=True)

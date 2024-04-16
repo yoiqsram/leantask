@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Tuple, TYPE_CHECKING
 
 from ...context import GlobalContext
-from ...flow import Flow
 from .index import add_index_parser
 from .info import add_info_parser
-from .logs import add_logs_parser
+from .log import add_log_parser
 from .run import add_run_parser
-from .runs import add_runs_parser
 from .schedule import add_schedule_parser
+from .status import add_status_parser
+
+if TYPE_CHECKING:
+    from ...flow import Flow
 
 
 def parse_args(
@@ -19,7 +23,7 @@ def parse_args(
     subparsers = parser.add_subparsers(
         dest='command',
         required=True,
-        help='Command to run.'
+        help='Command to run'
     )
 
     command_runners = {
@@ -27,8 +31,8 @@ def parse_args(
         'run': add_run_parser(subparsers),
         'index': add_index_parser(subparsers),
         'schedule': add_schedule_parser(subparsers),
-        'runs': add_runs_parser(subparsers),
-        'logs': add_logs_parser(subparsers)
+        'status': add_status_parser(subparsers),
+        'log': add_log_parser(subparsers)
     }
     return parser.parse_known_args(), command_runners
 
@@ -41,8 +45,4 @@ def run_cli(flow: Flow) -> None:
 
     if 'project_dir' in args and args.project_dir is not None:
         GlobalContext.set_project_dir(Path(args.project_dir).resolve())
-
-    if 'debug' in args and args.debug:
-        GlobalContext.LOG_DEBUG = True
-
     command_runners[args.command](args, flow)

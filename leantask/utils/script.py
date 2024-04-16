@@ -22,9 +22,10 @@ def get_confirmation(
         elif default is not None:
             return default
 
-        print("Invalid input. Please enter 'yes' or 'no'.")
-        if not allow_invalid_input:
-            raise ValueError('Invalid user input.')
+        else:
+            print("Invalid input. Please enter 'yes' or 'no'.")
+            if not allow_invalid_input:
+                raise ValueError('Invalid user input.')
 
 
 def calculate_md5(file_path: Union[str, Path]) -> str:
@@ -41,3 +42,50 @@ def import_lib(name: str, file_path: Union[str, Path]):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def display_scrollable_text(long_text: str):
+    import curses
+
+    def _display_scrollable_text(stdscr):
+        curses.curs_set(0)
+        curses.use_default_colors()
+        height, width = stdscr.getmaxyx()
+        stdscr.clear()
+        window = curses.newwin(height, width, 0, 0)
+
+        index = 0
+        lines = long_text.splitlines()
+        while True:
+            window.clear()
+            index = max(0, index)
+            end_index = index + height - 1
+            if end_index > len(lines):
+                index -= 1
+                end_index -= 1
+
+            for row, line in enumerate(lines[index:end_index]):
+                window.addstr(row, 0, line[:width])
+
+            window.addstr(
+                height - 1,
+                0,
+                "== Use arrow keys to scroll and 'q' to quit. ==",
+                curses.A_STANDOUT
+            )
+            stdscr.refresh()
+            window.refresh()
+
+            key = stdscr.getch()
+            if key == 258:
+                index += 1
+                continue
+
+            elif key == 259:
+                index -= 1
+                continue
+
+            elif key == ord('q'):
+                break
+
+    curses.wrapper(_display_scrollable_text)

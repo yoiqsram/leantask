@@ -370,13 +370,13 @@ class FlowRun(ModelMixin):
         self._task_runs_sorted[task_run.task] = task_run
 
     def execute_task_run(self, task_run: TaskRun) -> TaskRunStatus:
-        self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
+        self.logger.info(f"Prepare task run for '{task_run.task.name}'.")
 
         if task_run.status not in (
                 TaskRunStatus.SCHEDULED,
                 TaskRunStatus.PENDING
             ):
-            self.logger.debug(
+            self.logger.info(
                 f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}'"
                 f" thus it will not be run."
             )
@@ -390,23 +390,31 @@ class FlowRun(ModelMixin):
 
             if task_run.attempt > task_run.retry_max:
                 self.logger.info(
-                    f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
+                    f"There's a fail while executing task '{task_run.task.name}'."
+                    f" Task has run for {task_run.attempt} time(s)"
                     f" and reaching the maximum retry attempt of {task_run.retry_max}."
                 )
                 break
 
-            self.logger.debug(f"Wait for {task_run.retry_delay}s before retrying.")
+            self.logger.info(
+                f"There's a fail while executing task '{task_run.task.name}'."
+                f" Wait for {task_run.retry_delay}s before retrying."
+            )
             sleep(task_run.retry_delay)
             task_run = task_run.next_attempt()
 
         if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-            self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
+            self.logger.info(f"Task '{task_run.task.name}' has failed on all of its attempts.")
             for downstream_task_run in task_run.iter_downstream():
-                self.logger.debug(
+                self.logger.info(
                     f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
                 )
                 downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
 
+        self.logger.info(
+            f"Executed task '{task_run.task.name}' with final status: '{task_run.status.name}'."
+            f' Total attempt(s): {task_run.attempt}.'
+        )
         return task_run.status
 
     def execute(self) -> FlowRunStatus:

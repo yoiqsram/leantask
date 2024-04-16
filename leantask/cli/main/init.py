@@ -33,11 +33,6 @@ def add_init_parser(subparsers) -> None:
         action='store_true',
         help='Replace project if it already exists.'
     )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
 
     return init_project
 

@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import argparse
 import sys
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from ...context import GlobalContext
-from ...flow import Flow
 from ...enum import FlowIndexStatus
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
+
+if TYPE_CHECKING:
+    from ...flow import Flow
 
 logger = None
 
@@ -14,8 +18,8 @@ logger = None
 def add_index_parser(subparsers) -> Callable:
     parser: argparse.ArgumentParser = subparsers.add_parser(
         'index',
-        help='index flow to database',
-        description='index flow to database'
+        help='Index flow to database',
+        description='Index flow to database'
     )
     parser.add_argument(
         '--force', '-F',
@@ -27,16 +31,11 @@ def add_index_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler-session-id',
-        help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
         help=argparse.SUPPRESS
     )
 
@@ -48,8 +47,8 @@ def index_flow(
         flow: Flow
     ) -> None:
     global logger
-    if args.log_file is not None:
-        logger = get_logger('flow.index', args.log_file)
+    if args.log is not None:
+        logger = get_logger('flow.index', args.log)
     else:
         logger = get_local_logger('flow.index')
 

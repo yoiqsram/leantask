@@ -15,16 +15,11 @@ def add_discover_parser(subparsers) -> Callable:
         description='Discover workflows and indexed them.'
     )
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler_session_id',
-        help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
         help=argparse.SUPPRESS
     )
 
@@ -35,8 +30,8 @@ def discover_flows(args: argparse.Namespace):
     from ...discover import index_all_flows
 
     global logger
-    if args.log_file is not None:
-        log_file_path = Path(args.log_file)
+    if args.log is not None:
+        log_file_path = Path(args.log)
     else:
         log_file_path = GlobalContext.get_local_log_file_path()
 

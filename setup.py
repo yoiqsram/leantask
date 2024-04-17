@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='leantask',
-    version='0.4.0',
+    version='0.5.0-alpha',
     packages=find_packages(),
     install_requires=[
         'croniter==2.0.1',
@@ -15,5 +15,5 @@ setup(
         'typing_extensions==4.9.0'
     ],
     author='Yoiq S Rambadian',
-    description='Lite workflow scheduler to be used on low spec machine.'
+    description='Lite workflow scheduler to be used on low specs machine.'
 )

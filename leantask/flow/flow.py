@@ -238,6 +238,13 @@ class Flow(ModelMixin):
         self.save()
         return FlowIndexStatus.UPDATED
 
+    def get_task(self, name: str) -> Task:
+        for task in self._tasks:
+            if task.name == name:
+                return task
+
+        raise IndexError(f"No task named '{name}' was found.")
+
     def __repr__(self) -> str:
         return obj_repr(self, 'name', 'path', 'active')
 
@@ -370,7 +377,7 @@ class FlowRun(ModelMixin):
         self._task_runs_sorted[task_run.task] = task_run
 
     def execute_task_run(self, task_run: TaskRun) -> TaskRunStatus:
-        self.logger.info(f"Prepare task run for '{task_run.task.name}'.")
+        self.logger.info(f"Executing task '{task_run.task.name}'.")
 
         if task_run.status not in (
                 TaskRunStatus.SCHEDULED,
@@ -383,6 +390,7 @@ class FlowRun(ModelMixin):
             return task_run.status
 
         while True:
+            self.logger.info(f"New task run with id '{task_run._model.id}'.")
             task_run.execute()
 
             if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
@@ -426,23 +434,27 @@ class FlowRun(ModelMixin):
             self.logger.error('No task run was found.')
             has_failed = True
 
-        for task_run in task_runs:
-            if task_run.status in FAILED_TASK_RUN_STATUSES:
-                continue
+        try:
+            for task_run in task_runs:
+                if task_run.status in FAILED_TASK_RUN_STATUSES:
+                    continue
 
-            task_run_status = self.execute_task_run(task_run)
-            if task_run_status in FAILED_TASK_RUN_STATUSES:
-                has_failed = True
+                task_run_status = self.execute_task_run(task_run)
+                if task_run_status in FAILED_TASK_RUN_STATUSES:
+                    has_failed = True
 
+            if has_failed:
+                self.logger.debug(
+                    f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
+                )
+                self.status = FlowRunStatus.FAILED
+            else:
+                self.logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
+                self.status = FlowRunStatus.DONE
 
-        if has_failed:
-            self.logger.debug(
-                f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
-            )
+        except KeyboardInterrupt as exc:
             self.status = FlowRunStatus.FAILED
-        else:
-            self.logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
-            self.status = FlowRunStatus.DONE
+            self.logger.error(f'{exc.__class__.__name__}')
 
         self.logger.info(f"Flow run status: '{self.status.name}'.")
 
@@ -492,3 +504,16 @@ class FlowRun(ModelMixin):
 
     def __repr__(self) -> str:
         return obj_repr(self, 'flow_id', 'flow_name', 'status')
+
+
+def get_flow(name: str) -> Flow:
+    from ..utils.script import import_lib
+
+    flow_model = (
+        FlowModel.select()
+        .where(FlowModel.name == name)
+        .get()
+    )
+    flow_module = import_lib('flow', flow_model.path)
+    flow = flow_module.Flow.__context__.__defined__
+    return flow

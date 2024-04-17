@@ -6,9 +6,10 @@ from datetime import datetime
 from tabulate import tabulate
 from typing import Callable, List, TYPE_CHECKING
 
-from ...enum import FlowRunStatus
+from ...enum import FlowRunStatus, TaskRunStatus
 
 if TYPE_CHECKING:
+    from ...database import FlowRunModel
     from ...flow import Flow
 
 
@@ -23,6 +24,11 @@ def add_status_parser(subparsers) -> Callable:
         default=15,
         type=int,
         help='Maximum number of runs info to be shown.'
+    )
+    parser.add_argument(
+        '--tasks', '-T',
+        action='store_true',
+        help='Show all task stasuses.'
     )
     parser.add_argument(
         '--run-id', '-I',
@@ -51,7 +57,7 @@ def show_run_statuses(
         args: argparse.Namespace,
         flow: Flow
     ) -> None:
-    from ...database import FlowRunModel
+    from ...database import FlowRunModel, TaskRunModel
 
     if args.run_id is not None:
         keyword = args.run_id.replace('.', '') + '*'
@@ -95,33 +101,80 @@ def show_run_statuses(
         return
 
     run_statuses = []
-    for model in flow_run_models:
+    for flow_run_model in flow_run_models:
         schedule_datetime = None
-        if model.schedule_datetime is not None:
-            schedule_datetime = model.schedule_datetime.isoformat(sep=' ', timespec='minutes')
+        if flow_run_model.schedule_datetime is not None:
+            schedule_datetime = flow_run_model.schedule_datetime.isoformat(sep=' ', timespec='minutes')
 
         started_datetime = None
-        if model.started_datetime is not None:
-            started_datetime = model.started_datetime.isoformat(sep=' ', timespec='minutes')
+        if flow_run_model.started_datetime is not None:
+            started_datetime = flow_run_model.started_datetime.isoformat(sep=' ', timespec='minutes')
 
         total_time_elapsed = None
-        if model.status == FlowRunStatus.DONE.name \
-                or model.status.startswith(FlowRunStatus.FAILED.name):
-            total_time_elapsed = float((model.modified_datetime - model.started_datetime).seconds)
-        elif model.started_datetime is not None:
-            total_time_elapsed = float((datetime.now() - model.started_datetime).seconds)
+        if flow_run_model.status == FlowRunStatus.DONE.name \
+                or flow_run_model.status.startswith(FlowRunStatus.FAILED.name):
+            total_time_elapsed = float((flow_run_model.modified_datetime - flow_run_model.started_datetime).seconds)
+        elif flow_run_model.started_datetime is not None:
+            total_time_elapsed = float((datetime.now() - flow_run_model.started_datetime).seconds)
 
-        run_statuses.append(OrderedDict({
-            'Short Run Id': model.id.split('-')[0],
-            'Run/Schedule Datetime': schedule_datetime,
-            'Execution datetime': started_datetime,
-            'Status': model.status,
-            'Time Elapsed (s)': total_time_elapsed
-        }))
+        if args.tasks:
+            run_statuses.append(OrderedDict({
+                'Short Run Id': flow_run_model.id.split('-')[0],
+                'Run/Schedule Datetime': schedule_datetime,
+                'Execution datetime': started_datetime,
+                'Task Name': '-- Flow --',
+                'Attempt': None,
+                'Status': flow_run_model.status,
+                'Time Elapsed (s)': total_time_elapsed
+            }))
 
-    print(tabulate(
-        run_statuses,
-        headers='keys',
-        tablefmt='simple_outline',
-        floatfmt='.1f'
-    ))
+            task_run_models: List[TaskRunModel] = (
+                flow_run_model.task_runs
+                .order_by(TaskRunModel.modified_datetime)
+            )
+            for task_run_model in task_run_models:
+                task_started_datetime = None
+                if flow_run_model.started_datetime is not None:
+                    task_started_datetime = flow_run_model.started_datetime.isoformat(sep=' ', timespec='minutes')
+
+                task_total_time_elapsed = None
+                if task_run_model.status == TaskRunStatus.DONE.name \
+                        or task_run_model.status.startswith(TaskRunStatus.FAILED.name):
+                    task_total_time_elapsed = float((task_run_model.modified_datetime - task_run_model.started_datetime).seconds)
+                elif task_run_model.started_datetime is not None:
+                    task_total_time_elapsed = float((datetime.now() - task_run_model.started_datetime).seconds)
+
+                run_statuses.append(OrderedDict({
+                    'Short Run Id': task_run_model.id.split('-')[0],
+                    'Run/Schedule Datetime': None,
+                    'Execution datetime': task_started_datetime,
+                    'Task Name': task_run_model.task.name,
+                    'Attempt': task_run_model.attempt,
+                    'Status': task_run_model.status,
+                    'Time Elapsed (s)': task_total_time_elapsed
+                }))
+
+            print(tabulate(
+                run_statuses,
+                headers='keys',
+                tablefmt='simple_outline',
+                floatfmt='.1f'
+            ))
+            run_statuses = []
+
+        else:
+            run_statuses.append(OrderedDict({
+                'Short Run Id': flow_run_model.id.split('-')[0],
+                'Run/Schedule Datetime': schedule_datetime,
+                'Execution datetime': started_datetime,
+                'Status': flow_run_model.status,
+                'Time Elapsed (s)': total_time_elapsed
+            }))
+
+    if not args.tasks:
+        print(tabulate(
+            run_statuses,
+            headers='keys',
+            tablefmt='simple_outline',
+            floatfmt='.1f'
+        ))

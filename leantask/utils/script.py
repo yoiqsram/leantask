@@ -55,14 +55,17 @@ def display_scrollable_text(long_text: str):
         window = curses.newwin(height, width, 0, 0)
 
         index = 0
+        end_index = index + height - 1
+        new_index = index
+        new_end_index = end_index
         lines = long_text.splitlines()
         while True:
             window.clear()
-            index = max(0, index)
-            end_index = index + height - 1
-            if end_index > len(lines):
-                index -= 1
-                end_index -= 1
+            new_index = max(0, new_index)
+            new_end_index = new_index + height - 1
+            if new_end_index <= len(lines):
+                index = new_index
+                end_index = new_end_index
 
             for row, line in enumerate(lines[index:end_index]):
                 window.addstr(row, 0, line[:width])
@@ -78,11 +81,11 @@ def display_scrollable_text(long_text: str):
 
             key = stdscr.getch()
             if key == 258:
-                index += 1
+                new_index = index + 1
                 continue
 
             elif key == 259:
-                index -= 1
+                new_index = index - 1
                 continue
 
             elif key == ord('q'):

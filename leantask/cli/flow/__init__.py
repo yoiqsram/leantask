@@ -11,6 +11,7 @@ from .log import add_log_parser
 from .run import add_run_parser
 from .schedule import add_schedule_parser
 from .status import add_status_parser
+from .tasks import add_tasks_parser
 
 if TYPE_CHECKING:
     from ...flow import Flow
@@ -32,7 +33,8 @@ def parse_args(
         'index': add_index_parser(subparsers),
         'schedule': add_schedule_parser(subparsers),
         'status': add_status_parser(subparsers),
-        'log': add_log_parser(subparsers)
+        'log': add_log_parser(subparsers),
+        'tasks': add_tasks_parser(subparsers)
     }
     return parser.parse_known_args(), command_runners
 
@@ -45,4 +47,9 @@ def run_cli(flow: Flow) -> None:
 
     if 'project_dir' in args and args.project_dir is not None:
         GlobalContext.set_project_dir(Path(args.project_dir).resolve())
-    command_runners[args.command](args, flow)
+
+    if args.command == 'tasks': 
+        command_runners[args.command][args.tasks_command](args, flow)
+
+    else:
+        command_runners[args.command](args, flow)

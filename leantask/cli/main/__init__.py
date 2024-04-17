@@ -1,13 +1,12 @@
 import argparse
 from typing import Callable, Dict, Tuple
 
-from ...context import GlobalContext
 from .discover import add_discover_parser
 from .init import add_init_parser
 from .info import add_info_parser
 from .flows import add_flows_parser
 from .scheduler import add_scheduler_parser
-# from .tasks import add_tasks_parser
+from .tasks import add_tasks_parser
 
 
 def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
@@ -25,7 +24,7 @@ def parse_args() -> Tuple[argparse.Namespace, Dict[str, Callable]]:
         'info': add_info_parser(subparsers),
         'discover': add_discover_parser(subparsers),
         'flows': add_flows_parser(subparsers),
-        # 'tasks': add_tasks_parser(subparsers),
+        'tasks': add_tasks_parser(subparsers),
         'scheduler': add_scheduler_parser(subparsers)
     }
 

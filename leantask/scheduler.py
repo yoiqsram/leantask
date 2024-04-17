@@ -17,18 +17,14 @@ from .utils.string import generate_uuid, obj_repr, quote
 logger = None
 
 
-def execute_flow(
-        flow_run_model: FlowRunModel,
-        debug: bool = False
-    ) -> FlowRunStatus:
+def execute_flow(flow_run_model: FlowRunModel) -> FlowRunStatus:
     run_command = ' '.join((
         quote(sys.executable),
         quote(Path(flow_run_model.flow.path).resolve()),
         'run',
         '--run-id', str(flow_run_model.id),
         '--project-dir', quote(GlobalContext.PROJECT_DIR),
-        '--scheduler-session-id', GlobalContext.SCHEDULER_SESSION_ID,
-        '--debug' if debug else ''
+        '--scheduler-session-id', GlobalContext.SCHEDULER_SESSION_ID
     ))
     try:
         logger.info(f"Execute flow '{flow_run_model.flow.path}'.")
@@ -51,17 +47,15 @@ def execute_flow(
 
 def schedule_flow(
         flow_model: FlowModel,
-        log_file_path: Path,
-        debug: bool = False
+        log_file_path: Path
     ) -> FlowScheduleStatus:
     schedule_command = ' '.join((
         quote(sys.executable),
         quote(flow_model.path),
         'schedule',
         '--project-dir', quote(GlobalContext.PROJECT_DIR),
-        '--log-file', quote(log_file_path),
-        '--scheduler-session-id', GlobalContext.SCHEDULER_SESSION_ID,
-        '--debug' if debug else ''
+        '--log', quote(log_file_path),
+        '--scheduler-session-id', GlobalContext.SCHEDULER_SESSION_ID
     ))
     try:
         logger.info(f"Update schedule flow '{flow_model.name}'.")
@@ -82,17 +76,12 @@ def schedule_flow(
 
 def execute_and_reschedule_flow(
         flow_run_model: FlowRunModel,
-        log_file_path: Path,
-        debug: bool = False
+        log_file_path: Path
     ) -> Tuple[FlowRunStatus, FlowScheduleStatus]:
-    flow_run_status = execute_flow(
-        flow_run_model,
-        debug=debug
-    )
+    flow_run_status = execute_flow(flow_run_model)
     flow_schedule_status = schedule_flow(
         flow_run_model.flow,
-        log_file_path=log_file_path,
-        debug=debug
+        log_file_path=log_file_path
     )
     return flow_run_status, flow_schedule_status
 
@@ -153,8 +142,7 @@ class Scheduler:
     def __init__(
             self,
             worker: int = None,
-            heartbeat: int = None,
-            debug: bool = False
+            heartbeat: int = None
         ) -> None:
         self.id = generate_uuid()
         self.heartbeat = heartbeat if heartbeat is not None else GlobalContext.HEARTBEAT
@@ -162,8 +150,6 @@ class Scheduler:
         self.log_path = GlobalContext.get_scheduler_session_log_file_path()
 
         global logger
-        self.debug = debug
-        GlobalContext.LOG_DEBUG = self.debug
         logger = get_logger('scheduler', self.log_path)
         logger.debug(repr(self))
 
@@ -198,8 +184,7 @@ class Scheduler:
 
             schedule_flow(
                 flow_model,
-                log_file_path=self.log_path,
-                debug=self.debug
+                log_file_path=self.log_path
             )
 
         for flow_run_model in get_unfinished_flow_run_models():
@@ -211,14 +196,12 @@ class Scheduler:
                 executor.submit(
                     execute_and_reschedule_flow,
                     flow_run_model,
-                    self.log_path,
-                    self.debug
+                    self.log_path
                 )
             else:
                 execute_and_reschedule_flow(
                     flow_run_model,
-                    self.log_path,
-                    self.debug
+                    self.log_path
                 )
 
         logger.debug('Run routine has been completed.')
@@ -241,8 +224,7 @@ class Scheduler:
         for flow_model in self._flow_models:
             schedule_flow(
                 flow_model,
-                log_file_path=self.log_path,
-                debug=self.debug
+                log_file_path=self.log_path
             )
 
         if self.worker > 0:

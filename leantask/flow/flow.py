@@ -25,6 +25,7 @@ from .task import Task, TaskRun
 
 
 class Flow(ModelMixin):
+    __context__ = FlowContext
     __model__ = FlowModel
     __refs__ = ('id', )
 
@@ -39,9 +40,9 @@ class Flow(ModelMixin):
             active: bool = True,
             flow_id: str = None
         ) -> None:
-        if FlowContext.__defined__ is not None:
+        if self.__context__.__defined__ is not None:
             raise RuntimeError('You can only define one flow.')
-        FlowContext.__defined__ = self
+        self.__context__.__defined__ = self
 
         self.name = name
         self.description = description
@@ -56,12 +57,8 @@ class Flow(ModelMixin):
         else:
             self._schedule = None
 
-        try:
-            self._path = GlobalContext.relative_path(Path(inspect.stack()[-1].filename).resolve())
-            self._checksum = calculate_md5(self._path)
-        except FileNotFoundError:
-            self._path = None
-            self._checksum = None
+        self._path = GlobalContext.relative_path(Path(inspect.stack()[1].filename).resolve())
+        self._checksum = calculate_md5(self._path)
 
         self._tasks: Set[Task] = set()
         self._runs: List[FlowRun] = []
@@ -241,17 +238,24 @@ class Flow(ModelMixin):
         self.save()
         return FlowIndexStatus.UPDATED
 
+    def get_task(self, name: str) -> Task:
+        for task in self._tasks:
+            if task.name == name:
+                return task
+
+        raise IndexError(f"No task named '{name}' was found.")
+
     def __repr__(self) -> str:
         return obj_repr(self, 'name', 'path', 'active')
 
     def __enter__(self) -> Flow:
-        if FlowContext.__active__ is not None:
+        if self.__context__.__active__ is not None:
             raise RuntimeError(
                 "There's already an active flow at the moment. "
-                f' ({repr(FlowContext.__active__)})'
+                f' ({repr(self.__context__.__active__)})'
             )
 
-        FlowContext.__active__ = self
+        self.__context__.__active__ = self
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -259,7 +263,7 @@ class Flow(ModelMixin):
         import sys
         from ..cli.flow import run_cli
 
-        FlowContext.__active__ = None
+        self.__context__.__active__ = None
 
         main_script_path = Path(sys.argv[0]).resolve()
         main_caller_path = Path(inspect.stack()[1].filename).resolve()
@@ -373,19 +377,20 @@ class FlowRun(ModelMixin):
         self._task_runs_sorted[task_run.task] = task_run
 
     def execute_task_run(self, task_run: TaskRun) -> TaskRunStatus:
-        self.logger.debug(f"Prepare task run for '{task_run.task.name}'.")
+        self.logger.info(f"Executing task '{task_run.task.name}'.")
 
         if task_run.status not in (
                 TaskRunStatus.SCHEDULED,
                 TaskRunStatus.PENDING
             ):
-            self.logger.debug(
+            self.logger.info(
                 f"Task '{task_run.task.name}' is flagged as '{task_run.status.name}'"
                 f" thus it will not be run."
             )
             return task_run.status
 
         while True:
+            self.logger.info(f"New task run with id '{task_run._model.id}'.")
             task_run.execute()
 
             if task_run.status in (TaskRunStatus.DONE, TaskRunStatus.CANCELED):
@@ -393,23 +398,31 @@ class FlowRun(ModelMixin):
 
             if task_run.attempt > task_run.retry_max:
                 self.logger.info(
-                    f"Task '{task_run.task.name}' has run for {task_run.attempt} time(s)"
+                    f"There's a fail while executing task '{task_run.task.name}'."
+                    f" Task has run for {task_run.attempt} time(s)"
                     f" and reaching the maximum retry attempt of {task_run.retry_max}."
                 )
                 break
 
-            self.logger.debug(f"Wait for {task_run.retry_delay}s before retrying.")
+            self.logger.info(
+                f"There's a fail while executing task '{task_run.task.name}'."
+                f" Wait for {task_run.retry_delay}s before retrying."
+            )
             sleep(task_run.retry_delay)
             task_run = task_run.next_attempt()
 
         if task_run.status in (TaskRunStatus.FAILED, TaskRunStatus.FAILED_BY_USER):
-            self.logger.debug(f"Task '{task_run.task.name}' has failed on all of its attempts.")
+            self.logger.info(f"Task '{task_run.task.name}' has failed on all of its attempts.")
             for downstream_task_run in task_run.iter_downstream():
-                self.logger.debug(
+                self.logger.info(
                     f"Set task '{downstream_task_run.task.name}' status to '{TaskRunStatus.FAILED_UPSTREAM.name}'."
                 )
                 downstream_task_run.status = TaskRunStatus.FAILED_UPSTREAM
 
+        self.logger.info(
+            f"Executed task '{task_run.task.name}' with final status: '{task_run.status.name}'."
+            f' Total attempt(s): {task_run.attempt}.'
+        )
         return task_run.status
 
     def execute(self) -> FlowRunStatus:
@@ -421,23 +434,27 @@ class FlowRun(ModelMixin):
             self.logger.error('No task run was found.')
             has_failed = True
 
-        for task_run in task_runs:
-            if task_run.status in FAILED_TASK_RUN_STATUSES:
-                continue
+        try:
+            for task_run in task_runs:
+                if task_run.status in FAILED_TASK_RUN_STATUSES:
+                    continue
 
-            task_run_status = self.execute_task_run(task_run)
-            if task_run_status in FAILED_TASK_RUN_STATUSES:
-                has_failed = True
+                task_run_status = self.execute_task_run(task_run)
+                if task_run_status in FAILED_TASK_RUN_STATUSES:
+                    has_failed = True
 
+            if has_failed:
+                self.logger.debug(
+                    f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
+                )
+                self.status = FlowRunStatus.FAILED
+            else:
+                self.logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
+                self.status = FlowRunStatus.DONE
 
-        if has_failed:
-            self.logger.debug(
-                f"Set flow status to '{FlowRunStatus.FAILED.name}' due to failure on at least a task."
-            )
+        except KeyboardInterrupt as exc:
             self.status = FlowRunStatus.FAILED
-        else:
-            self.logger.debug(f"Set flow status '{FlowRunStatus.DONE.name}'.")
-            self.status = FlowRunStatus.DONE
+            self.logger.error(f'{exc.__class__.__name__}')
 
         self.logger.info(f"Flow run status: '{self.status.name}'.")
 
@@ -487,3 +504,16 @@ class FlowRun(ModelMixin):
 
     def __repr__(self) -> str:
         return obj_repr(self, 'flow_id', 'flow_name', 'status')
+
+
+def get_flow(name: str) -> Flow:
+    from ..utils.script import import_lib
+
+    flow_model = (
+        FlowModel.select()
+        .where(FlowModel.name == name)
+        .get()
+    )
+    flow_module = import_lib('flow', flow_model.path)
+    flow = flow_module.Flow.__context__.__defined__
+    return flow

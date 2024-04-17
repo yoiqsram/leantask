@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import argparse
 import sys
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from ...context import GlobalContext
-from ...database import FlowRunModel
 from ...enum import FlowRunStatus
-from ...flow import Flow, FlowRun
 from ...logging import get_local_logger, get_logger
 from ...utils.script import get_confirmation
 from ...utils.string import quote
+
+if TYPE_CHECKING:
+    from ...flow import Flow
 
 logger = None
 
@@ -19,6 +22,12 @@ def add_run_parser(subparsers) -> Callable:
         help='run flow',
         description='run flow'
     )
+    add_run_arguments(parser)
+
+    return run_flow
+
+
+def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--run-id',
         help='Continue run based on flow run id.'
@@ -46,20 +55,13 @@ def add_run_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler-session-id',
         help=argparse.SUPPRESS
     )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
-
-    return run_flow
 
 
 def run_flow(
@@ -67,8 +69,8 @@ def run_flow(
         flow: Flow
     ) -> None:
     global logger
-    if args.log_file is not None:
-        logger = get_logger('flow.run', args.log_file)
+    if args.log is not None:
+        logger = get_logger('flow.run', args.log)
     else:
         logger = get_local_logger('flow.run')
 
@@ -139,6 +141,9 @@ def prepare_flow_from_database(
         rerun: bool,
         force: bool
     ):
+    from ...database import FlowRunModel
+    from ...flow import FlowRun
+
     if not force and not flow.active:
         logger.error('Flow is currently inactive.')
         raise SystemExit(FlowRunStatus.CANCELED.value)

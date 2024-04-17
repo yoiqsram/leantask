@@ -3,9 +3,9 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from ...context import GlobalContext
-from ...logging import get_logger
-from ...utils.string import quote
+from ....context import GlobalContext
+from ....logging import get_logger
+from ....utils.string import quote
 
 
 def add_discover_parser(subparsers) -> Callable:
@@ -14,29 +14,28 @@ def add_discover_parser(subparsers) -> Callable:
         help='Discover workflows and indexed them.',
         description='Discover workflows and indexed them.'
     )
+    add_discover_arguments(parser)
+
+    return discover_flows
+
+
+def add_discover_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler_session_id',
         help=argparse.SUPPRESS
     )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
-
-    return discover_flows
 
 
 def discover_flows(args: argparse.Namespace):
-    from ...discover import index_all_flows
+    from ....discover import index_all_flows
 
     global logger
-    if args.log_file is not None:
-        log_file_path = Path(args.log_file)
+    if args.log is not None:
+        log_file_path = Path(args.log)
     else:
         log_file_path = GlobalContext.get_local_log_file_path()
 

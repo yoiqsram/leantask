@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 import argparse
 import sys
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from ...context import GlobalContext
-from ...database import FlowScheduleModel, FlowRunModel
 from ...enum import FlowRunStatus, FlowScheduleStatus, TaskRunStatus
-from ...flow import Flow, FlowRun
 from ...logging import get_local_logger, get_logger
 from ...utils.string import quote
+
+if TYPE_CHECKING:
+    from ...database import FlowScheduleModel
+    from ...flow import Flow
 
 logger = None
 
@@ -19,6 +23,12 @@ def add_schedule_parser(subparsers) -> Callable:
         help='schedule to queue system',
         description='schedule to queue system'
     )
+    add_schedule_arguments(parser)
+
+    return schedule_flow
+
+
+def add_schedule_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--datetime', '-D',
         help='Schedule datetime.'
@@ -38,26 +48,19 @@ def add_schedule_parser(subparsers) -> Callable:
         help='Project directory. Default to current directory.'
     )
     parser.add_argument(
-        '--log-file',
+        '--log',
         help=argparse.SUPPRESS
     )
     parser.add_argument(
         '--scheduler-session-id',
         help=argparse.SUPPRESS
     )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
-
-    return schedule_flow
 
 
 def schedule_flow(args: argparse.Namespace, flow) -> None:
     global logger
-    if args.log_file is not None:
-        logger = get_logger('flow.schedule', args.log_file)
+    if args.log is not None:
+        logger = get_logger('flow.schedule', args.log)
     else:
         logger = get_local_logger('flow.schedule')
 
@@ -124,6 +127,8 @@ def update_schedule(
         is_manual: bool,
         force: bool
     ) -> None:
+    from ...database import FlowRunModel, FlowScheduleModel
+
     logger.debug("Get flow's current schedule if exists.")
     flow_schedule_models = list(
         flow._model.flow_schedules
@@ -225,6 +230,8 @@ def create_new_flow_run(
         flow: Flow,
         flow_schedule_model: FlowScheduleModel,
     ) -> None:
+    from ...flow import FlowRun
+
     logger.debug('Create new scheduled flow run.')
     is_manual = flow_schedule_model.is_manual
 

@@ -1,8 +1,6 @@
 import argparse
 from typing import Callable
 
-from ....utils.script import import_lib
-
 
 def add_log_parser(subparsers) -> Callable:
     parser: argparse.ArgumentParser = subparsers.add_parser(
@@ -44,15 +42,8 @@ def add_log_parser(subparsers) -> Callable:
 
 
 def show_task_log(args: argparse.Namespace) -> None:
-    from ....database import FlowModel
+    from ....flow import get_flow
     from ...flow.tasks.log import show_task_log
 
-    flow_model = (
-        FlowModel.select()
-        .where(FlowModel.name == args.flow_name)
-        .get()
-    )
-    flow_module = import_lib('flow', flow_model.path)
-    flow = flow_module.Flow.__context__.__defined__
-
+    flow = get_flow(args.flow_name)
     show_task_log(args, flow)

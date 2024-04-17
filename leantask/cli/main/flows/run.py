@@ -3,6 +3,8 @@ from typing import Callable
 
 
 def add_run_parser(subparsers) -> Callable:
+    from ...flow.run import add_run_arguments
+
     parser: argparse.ArgumentParser = subparsers.add_parser(
         'run',
         help='Run workflow.',
@@ -12,40 +14,7 @@ def add_run_parser(subparsers) -> Callable:
         'flow_name',
         help='Flow name'
     )
-    parser.add_argument(
-        '--run-id',
-        help='Continue run based on flow run id.'
-    )
-    parser.add_argument(
-        '--local', '-L',
-        action='store_true',
-        help=(
-            'NOT RECOMMENDED. Run locally without using scheduler thus will not be logged. '
-            'Please use this only for testing purposes.'
-        )
-    )
-    parser.add_argument(
-        '--rerun', '-R',
-        action='store_true',
-        help='Rerun failed or canceled run.'
-    )
-    parser.add_argument(
-        '--force', '-F',
-        action='store_true',
-        help='NOT RECOMMENDED. Bypass any confirmation before run.'
-    )
-    parser.add_argument(
-        '--project-dir', '-P',
-        help='Project directory. Default to current directory.'
-    )
-    parser.add_argument(
-        '--log',
-        help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '--scheduler-session-id',
-        help=argparse.SUPPRESS
-    )
+    add_run_arguments(parser)
 
     return run_flow
 

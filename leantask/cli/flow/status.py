@@ -19,6 +19,12 @@ def add_status_parser(subparsers) -> Callable:
         help='Show latest run statuses.',
         description='Show latest run statuses.'
     )
+    add_status_arguments(parser)
+
+    return show_run_statuses
+
+
+def add_status_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--limit', '-l',
         default=15,
@@ -49,9 +55,6 @@ def add_status_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-
-    return show_run_statuses
-
 
 def show_run_statuses(
         args: argparse.Namespace,

@@ -21,6 +21,12 @@ def add_log_parser(subparsers) -> Callable:
         'task_name',
         help='Flow name'
     )
+    add_task_log_arguments(parser)
+
+    return show_task_log
+
+
+def add_task_log_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--run-id', '-I',
         help='Filter by run id.'
@@ -42,8 +48,6 @@ def add_log_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-
-    return show_task_log
 
 
 def show_task_log(

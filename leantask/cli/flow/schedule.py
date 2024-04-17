@@ -23,6 +23,12 @@ def add_schedule_parser(subparsers) -> Callable:
         help='schedule to queue system',
         description='schedule to queue system'
     )
+    add_schedule_arguments(parser)
+
+    return schedule_flow
+
+
+def add_schedule_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--datetime', '-D',
         help='Schedule datetime.'
@@ -49,8 +55,6 @@ def add_schedule_parser(subparsers) -> Callable:
         '--scheduler-session-id',
         help=argparse.SUPPRESS
     )
-
-    return schedule_flow
 
 
 def schedule_flow(args: argparse.Namespace, flow) -> None:

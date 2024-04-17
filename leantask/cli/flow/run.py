@@ -22,6 +22,12 @@ def add_run_parser(subparsers) -> Callable:
         help='run flow',
         description='run flow'
     )
+    add_run_arguments(parser)
+
+    return run_flow
+
+
+def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--run-id',
         help='Continue run based on flow run id.'
@@ -56,8 +62,6 @@ def add_run_parser(subparsers) -> Callable:
         '--scheduler-session-id',
         help=argparse.SUPPRESS
     )
-
-    return run_flow
 
 
 def run_flow(

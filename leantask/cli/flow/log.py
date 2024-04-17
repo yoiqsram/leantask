@@ -17,6 +17,12 @@ def add_log_parser(subparsers) -> Callable:
         help='Show log of a run.',
         description='Show log of a run.'
     )
+    add_log_arguments(parser)
+
+    return show_log
+
+
+def add_log_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--run-id', '-I',
         help='Filter by run id.'
@@ -32,8 +38,6 @@ def add_log_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-
-    return show_log
 
 
 def show_log(

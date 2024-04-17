@@ -21,6 +21,12 @@ def add_index_parser(subparsers) -> Callable:
         help='Index flow to database',
         description='Index flow to database'
     )
+    add_index_arguments(parser)
+
+    return index_flow
+
+
+def add_index_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--force', '-F',
         action='store_true',
@@ -38,8 +44,6 @@ def add_index_parser(subparsers) -> Callable:
         '--scheduler-session-id',
         help=argparse.SUPPRESS
     )
-
-    return index_flow
 
 
 def index_flow(

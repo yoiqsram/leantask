@@ -10,6 +10,12 @@ def add_scheduler_parser(subparsers) -> Callable:
         help='Leantask scheduler',
         description='Leantask scheduler'
     )
+    add_scheduler_arguments(parser)
+
+    return run_scheduler
+
+
+def add_scheduler_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--worker', '-W',
         type=int,
@@ -24,8 +30,6 @@ def add_scheduler_parser(subparsers) -> Callable:
         '--project-dir', '-P',
         help='Project directory. Default to current directory.'
     )
-
-    return run_scheduler
 
 
 def run_scheduler(args: argparse.Namespace) -> None:

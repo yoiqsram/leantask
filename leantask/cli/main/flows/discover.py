@@ -14,6 +14,12 @@ def add_discover_parser(subparsers) -> Callable:
         help='Discover workflows and indexed them.',
         description='Discover workflows and indexed them.'
     )
+    add_discover_arguments(parser)
+
+    return discover_flows
+
+
+def add_discover_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--log',
         help=argparse.SUPPRESS
@@ -22,8 +28,6 @@ def add_discover_parser(subparsers) -> Callable:
         '--scheduler_session_id',
         help=argparse.SUPPRESS
     )
-
-    return discover_flows
 
 
 def discover_flows(args: argparse.Namespace):

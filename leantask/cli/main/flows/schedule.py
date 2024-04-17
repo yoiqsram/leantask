@@ -3,6 +3,8 @@ from typing import Callable
 
 
 def add_schedule_parser(subparsers) -> Callable:
+    from ...flow.schedule import add_schedule_arguments
+
     parser: argparse.ArgumentParser = subparsers.add_parser(
         'schedule',
         help='schedule to queue system',
@@ -12,32 +14,7 @@ def add_schedule_parser(subparsers) -> Callable:
         'flow_name',
         help='Flow name'
     )
-    parser.add_argument(
-        '--datetime', '-D',
-        help='Schedule datetime.'
-    )
-    parser.add_argument(
-        '--now', '-N',
-        action='store_true',
-        help='Schedule task to run now.'
-    )
-    parser.add_argument(
-        '--force', '-F',
-        action='store_true',
-        help='Force add schedule even if it exists.'
-    )
-    parser.add_argument(
-        '--project-dir', '-P',
-        help='Project directory. Default to current directory.'
-    )
-    parser.add_argument(
-        '--log',
-        help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '--scheduler-session-id',
-        help=argparse.SUPPRESS
-    )
+    add_schedule_arguments(parser)
 
     return schedule_flow
 

@@ -23,6 +23,12 @@ def add_init_parser(subparsers) -> None:
         help='Initialize leantask project.',
         description='Initialize leantask project.'
     )
+    add_init_arguments(parser)
+
+    return init_project
+
+
+def add_init_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--name', '-N',
         default=GlobalContext.PROJECT_DIR.name,
@@ -33,8 +39,6 @@ def add_init_parser(subparsers) -> None:
         action='store_true',
         help='Replace project if it already exists.'
     )
-
-    return init_project
 
 
 def init_project(args: argparse.Namespace) -> None:

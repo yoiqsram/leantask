@@ -3,6 +3,8 @@ from typing import Callable
 
 
 def add_log_parser(subparsers) -> Callable:
+    from ...flow.log import add_log_arguments
+
     parser: argparse.ArgumentParser = subparsers.add_parser(
         'log',
         help='Show log of a run.',
@@ -12,21 +14,7 @@ def add_log_parser(subparsers) -> Callable:
         'flow_name',
         help='Flow name'
     )
-    parser.add_argument(
-        '--run-id', '-I',
-        help='Filter by run id.'
-    )
-    parser.add_argument(
-        '--datetime', '-D',
-        help=(
-            'Filter by run datetime (ISO format). '
-            'Example: 2024-02-22 or 2024-02-22T10:00'
-        )
-    )
-    parser.add_argument(
-        '--project-dir', '-P',
-        help='Project directory. Default to current directory.'
-    )
+    add_log_arguments(parser)
 
     return logs_flow
 
